@@ -48,6 +48,10 @@ const holders = defineMessages({
         id: 'user.settings.general.loginGitlab',
         defaultMessage: 'Log in done through GitLab'
     },
+    loginADFS: {
+        id: 'user.settings.general.loginADFS',
+        defaultMessage: 'Log in done through ADFS'
+    },
     validImage: {
         id: 'user.settings.general.validImage',
         defaultMessage: 'Only JPG or PNG images may be used for profile pictures'
@@ -663,6 +667,21 @@ class UserSettingsGeneralTab extends React.Component {
                         {helpText}
                     </div>
                 );
+            } else if (this.props.user.auth_service === Constants.ADFS_SERVICE) {
+                inputs.push(
+                    <div
+                        key='oauthEmailInfo'
+                        className='form-group'
+                    >
+                        <div className='setting-list__hint'>
+                            <FormattedMessage
+                                id='user.settings.general.emailCantUpdateADFS'
+                                defaultMessage='Log in occurs through ADFS. Email cannot be updated.'
+                            />
+                        </div>
+                        {helpText}
+                    </div>
+                );
             }
 
             emailSection = (
@@ -693,6 +712,8 @@ class UserSettingsGeneralTab extends React.Component {
                 }
             } else if (this.props.user.auth_service === Constants.GITLAB_SERVICE) {
                 describe = formatMessage(holders.loginGitlab);
+            } else if (this.props.user.auth_service === Constants.ADFS_SERVICE) {
+                describe = formatMessage(holders.loginADFS);
             }
 
             emailSection = (
@@ -753,7 +774,7 @@ class UserSettingsGeneralTab extends React.Component {
                         aria-label={formatMessage(holders.close)}
                         onClick={this.props.closeModal}
                     >
-                        <span aria-hidden='true'>{'×'}</span>
+                        <span aria-hidden='true'>X</span>
                     </button>
                     <h4
                         className='modal-title'

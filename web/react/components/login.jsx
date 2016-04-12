@@ -41,6 +41,24 @@ export default class Login extends React.Component {
             );
         }
 
+        if (global.window.mm_config.EnableSignUpWithADFS === 'true') {
+            loginMessage.push(
+                    <a
+                        className='btn btn-custom-login adfs'
+                        key='adfs'
+                        href={'/' + teamName + '/login/adfs'}
+                    >
+                        <span className='icon'/>
+                        <span>
+                            <FormattedMessage
+                                id='login.adfs'
+                                defaultMessage='with ADFS'
+                            />
+                        </span>
+                    </a>
+            );
+        }
+
         if (global.window.mm_config.EnableSignUpWithGoogle === 'true') {
             loginMessage.push(
                     <a

@@ -1,9 +1,7 @@
 {
 	"ImportPath": "github.com/mattermost/platform",
 	"GoVersion": "go1.5.1",
-	"Packages": [
-		"./..."
-	],
+	"GodepVersion": "v60",
 	"Deps": [
 		{
 			"ImportPath": "github.com/alecthomas/log4go",
@@ -17,6 +15,11 @@
 		{
 			"ImportPath": "github.com/cloudfoundry/jibber_jabber",
 			"Rev": "bcc4c8345a21301bf47c032ff42dd1aae2fe3027"
+		},
+		{
+			"ImportPath": "github.com/dgrijalva/jwt-go",
+			"Comment": "v2.5.0",
+			"Rev": "b446e078d613dc395bf50b08884acbeafb19ce50"
 		},
 		{
 			"ImportPath": "github.com/disintegration/imaging",

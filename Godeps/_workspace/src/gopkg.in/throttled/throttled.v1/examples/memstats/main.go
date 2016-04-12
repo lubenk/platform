@@ -84,7 +84,7 @@ func main() {
 	// Print stats once in a while
 	go func() {
 		var mem runtime.MemStats
-		for _ = range time.Tick(10 * time.Second) {
+		for range time.Tick(10 * time.Second) {
 			mu.Lock()
 			runtime.ReadMemStats(&mem)
 			log.Printf("ok: %d, ko: %d", ok, ko)

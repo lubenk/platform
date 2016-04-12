@@ -299,12 +299,32 @@ class SecurityTab extends React.Component {
                 );
             }
 
+            let ADFSOption;
+            if (global.window.mm_config.EnableSignUpWithADFS === 'true' && user.auth_service === '') {
+                ADFSOption = (
+                    <div>
+                        <a
+                            className='btn btn-primary'
+                            href={'/' + teamName + '/claim?email=' + encodeURIComponent(user.email) + '&new_type=' + Constants.ADFS_SERVICE}
+                        >
+                            <FormattedMessage
+                                id='user.settings.security.switchADFS'
+                                defaultMessage='Switch to using ADFS SSO'
+                            />
+                        </a>
+                        <br/>
+                    </div>
+                );
+            }
+
             inputs.push(
                 <div key='userSignInOption'>
                    {emailOption}
                    {gitlabOption}
                    <br/>
                    {googleOption}
+                   <br/>
+                   {ADFSOption}
                 </div>
             );
 
@@ -351,6 +371,13 @@ class SecurityTab extends React.Component {
                     defaultMessage='GitLab SSO'
                 />
             );
+        } else if (this.props.user.auth_service === Constants.ADFS_SERVICE) {
+            describe = (
+                <FormattedMessage
+                    id='user.settings.security.adfs'
+                    defaultMessage='ADFS SSO'
+                />
+            );
         }
 
         return (
@@ -367,6 +394,7 @@ class SecurityTab extends React.Component {
 
         let numMethods = 0;
         numMethods = global.window.mm_config.EnableSignUpWithGitLab === 'true' ? numMethods + 1 : numMethods;
+        numMethods = global.window.mm_config.EnableSignUpWithADFS === 'true' ? numMethods + 1 : numMethods;
         numMethods = global.window.mm_config.EnableSignUpWithGoogle === 'true' ? numMethods + 1 : numMethods;
 
         if (global.window.mm_config.EnableSignUpWithEmail && numMethods > 0) {
@@ -383,7 +411,7 @@ class SecurityTab extends React.Component {
                         aria-label={this.props.intl.formatMessage(holders.close)}
                         onClick={this.props.closeModal}
                     >
-                        <span aria-hidden='true'>{'×'}</span>
+                        <span aria-hidden='true'>X</span>
                     </button>
                     <h4
                         className='modal-title'

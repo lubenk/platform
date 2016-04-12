@@ -1,8 +1,24 @@
 # Mattermost Changelog
 
-## Release v2.1.0
+## Release v2.1.1
 
-Expected release date: 2016-03-16
+### New Features
+ADFS
+- Added functionality for mattermost to authenticate with ADFS 3.0 via oauth2
+
+#### Bug Fixes
+-Fixed spelling error for admin.gitab.clientSecretDescription to admin.gitlab.clientSecretDescription
+-Extended test time in Makefile as building on slower computers fails (Azure)
+
+#### Contributors 
+- [lubenk](https://github.com/lubenk)
+
+#### Dependency
+- New dependency added for JWT verification to work: https://github.com/dgrijalva/jwt-go (credid to https://github.com/dgrijalva)
+
+Expected release date: 2016-04-13
+
+## Release v2.1.0
 
 ### Highlights 
 
@@ -34,7 +50,7 @@ Active Directory/LDAP (Enterprise Edition)
 
 System Console
 
-- Removed unused “Disable File Storage” option from the System Console as it is no longer relevant. 
+- Removed unused .Disable File Storage. option from the System Console as it is no longer relevant. 
 - Added a warning message if a system admin demotes themselves.
 - System Console statistics now use a client store instead of fetching data and storing it in state.
 
@@ -61,7 +77,7 @@ User Interface
 - Keyboard focus is set to the text input box in the RHS if a user clicks the reply icon.
 - Permalinks are now displayed in a Copy Permalink dialog instead of a popover.
 - Permalink option is now available from the [...] menu on messages and comments in the RHS.
-- Reply icon now only appears on-hover for messages that don’t have replies.
+- Reply icon now only appears on-hover for messages that don.t have replies.
 - Scroll bar now appears in the center channel.
 
 Enterprise Edition
@@ -74,13 +90,13 @@ Enterprise Edition
 - System console user management tab now shows username and email on different lines.
 - Yellow text box error no longer appears when the system is connected.
 - Wildcard search on MySQL databases is now fixed.
-- Usernames in the center channel no longer appear as “...” on login.
+- Usernames in the center channel no longer appear as ..... on login.
 - Deleted messages now delete in the RHS and center channel without requiring a page refresh.
 - Contact us email address in the footer of notification emails now uses the SupportEmail config setting instead of FeedbackEmail. 
 - Email addresses are now required to have at least one letter before and after the @ sign.
 - Firefox desktop notifications are now fixed for some users experiencing missed notifications.
-- “User is typing” message containing long usernames no longer causes text wrapping.
-- Usernames appearing as “...” in the RHS when performing a search is fixed.
+- .User is typing. message containing long usernames no longer causes text wrapping.
+- Usernames appearing as ..... in the RHS when performing a search is fixed.
 - Links that end in image extensions but do not actually link to raw images no longer generate a blank image preview.
 - Channel handle field in the Rename Channel dialog is now visible on themes with dark backgrounds.
 - Autolinked images no longer persist after the post containing the link is deleted.
@@ -90,8 +106,8 @@ Enterprise Edition
 - Recent mentions icon no longer jumps to the left of the search bar when the RHS is opened.
 - Custom slash command hints now show up in the autocomplete list.
 - GIF links inside code blocks no longer auto-post the GIFs.
-- Changing usernames no longer adds the old username to “words that trigger mentions”.
-- Notification email footer is now translated based on the sender’s language setting.
+- Changing usernames no longer adds the old username to .words that trigger mentions..
+- Notification email footer is now translated based on the sender.s language setting.
 - Slash command `/me` now posts as the user instead of a webhook message.
 - Logout slash command now forces logout.
 - Public links to file attachments on deleted posts no longer work.
@@ -201,7 +217,7 @@ Files and Images
 
 Onboarding
 
-- “Get Team Invite Link” option is disabled from the main menu if user creation is disabled for the team
+- .Get Team Invite Link. option is disabled from the main menu if user creation is disabled for the team
 - Tutorial colors improved to provide higher contrast with new default theme
 
 Authentication
@@ -235,18 +251,18 @@ User Interface
 
 #### Bug Fixes  
 
-- Incorrect “Mattermost unreachable” error on iOS no longer appears
-- Dialog to confirm deletion of a post now supports hitting “ENTER” to confirm deletion. 
+- Incorrect .Mattermost unreachable. error on iOS no longer appears
+- Dialog to confirm deletion of a post now supports hitting .ENTER. to confirm deletion. 
 - Keyboard focus on the New Channel modal on IE11 is now contained within the text box.
-- LHS indicator for “Unread Posts Above/Below” now displays on IE11
+- LHS indicator for .Unread Posts Above/Below. now displays on IE11
 - Unresponsive UI when viewing a permalink is fixed if a user clicks outside the text on the "Click here to jump to recent messages" bar. 
 - Dismissed blue bar error messages no longer re-appear on page refresh.
 - Console error is no longer thrown on first page load in Firefox and Edge.
 - Console error and missing notification is fixed for the first direct message received from any user.
 - Comment bubble in Firefox no longer appears with a box around it on-hover.
 - Home screen icons on Android and iOS devices now appear with the Mattermost logo.
-- Switching channels now clears the “user is typing” message below the text input box.
-- iOS devices are no longer detected as “unknown” devices in the session history.
+- Switching channels now clears the .user is typing. message below the text input box.
+- iOS devices are no longer detected as .unknown. devices in the session history.
 
 ### Compatibility  
 Changes from v1.4 to v2.0:
@@ -655,7 +671,7 @@ Team Settings
 
 Extras
 
-- Added `/shrug KEYWORD` command to output: `¯\_(ツ)_/¯ KEYWORD`
+- Added `/shrug KEYWORD` command to output: `¯\_(.)_/¯ KEYWORD`
 - Added `/me KEYWORD` command to output: _`KEYWORD`_ 
 - Added setting option to send a message on control-enter instead of enter
 
@@ -715,7 +731,7 @@ The following is for informational purposes only, no action needed. Mattermost a
 - Media files of type .avi .mkv .wmv .mov .flv .mp4a do not play  properly
 - Editing a post so that it's text is blank (which should delete it) throws a 404
 - No scroll bar in centre channel
-- Theme color import from Slack fails to import the “Active Channel” selection color
+- Theme color import from Slack fails to import the .Active Channel. selection color
 - Pasting images into text box fails to upload on Firefox and Safari
 - Users cannot claim accounts imported from Slack via password reset
 - Slack import @mentions break
@@ -1259,7 +1275,7 @@ Security and Administration
 
 On-boarding 
 
-- “Off-Topic” now available as default channel, in addition to “Town Square” 
+- .Off-Topic. now available as default channel, in addition to .Town Square. 
 
 ### Improvements
 
@@ -1313,3 +1329,4 @@ Anywhere Access
 
 - Use Mattermost from web-enabled PCs and phones
 - Define team-specific branding and color themes across your devices
+

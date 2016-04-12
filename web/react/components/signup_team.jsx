@@ -25,6 +25,10 @@ export default class TeamSignUp extends React.Component {
             count = count + 1;
         }
 
+        if (global.window.mm_config.EnableSignUpWithADFS === 'true') {
+            count = count + 1;
+        }
+
         if (global.window.mm_config.EnableLdap === 'true') {
             count = count + 1;
         }
@@ -37,6 +41,8 @@ export default class TeamSignUp extends React.Component {
             this.state = {page: 'gitlab'};
         } else if (global.window.mm_config.EnableLdap === 'true') {
             this.state = {page: 'ldap'};
+        } else if (global.window.mm_config.EnableSignUpWithADFS === 'true') {
+            this.state = {page: 'adfs'};
         } else {
             this.state = {page: 'none'};
         }
@@ -161,6 +167,13 @@ export default class TeamSignUp extends React.Component {
                     <SSOSignupPage service={Constants.GOOGLE_SERVICE}/>
                 </div>
             );
+        } else if (this.state.page === 'adfs') {
+            return (
+                <div>
+                    {teamListing}
+                    <SSOSignupPage service={Constants.ADFS_SERVICE}/>
+                </div>
+            );
         } else if (this.state.page === 'none') {
             return (
                 <div>
@@ -179,4 +192,3 @@ export default class TeamSignUp extends React.Component {
 TeamSignUp.propTypes = {
     teams: React.PropTypes.array
 };
-

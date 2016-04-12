@@ -226,7 +226,7 @@ class GitLabSettings extends React.Component {
                             />
                             <p className='help-text'>
                                 <FormattedMessage
-                                    id='admin.gitab.clientSecretDescription'
+                                    id='admin.gitlab.clientSecretDescription'
                                     defaultMessage='Obtain this value via the instructions above for logging into GitLab.'
                                 />
                             </p>

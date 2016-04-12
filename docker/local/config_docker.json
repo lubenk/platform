@@ -1,6 +1,6 @@
 {
     "ServiceSettings": {
-        "ListenAddress": ":80",
+        "ListenAddress": ":8065",
         "MaximumLoginAttempts": 10,
         "SegmentDeveloperKey": "",
         "GoogleDeveloperKey": "",
@@ -15,10 +15,13 @@
         "EnableDeveloper": false,
         "EnableSecurityFixAlert": true,
         "EnableInsecureOutgoingConnections": false,
-        "SessionLengthWebInDays" : 30,
-        "SessionLengthMobileInDays" : 30,
-        "SessionLengthSSOInDays" : 30,
-        "SessionCacheInMinutes" : 10
+        "AllowCorsFrom": "",
+        "SessionLengthWebInDays": 30,
+        "SessionLengthMobileInDays": 30,
+        "SessionLengthSSOInDays": 30,
+        "SessionCacheInMinutes": 10,
+        "WebsocketSecurePort": 443,
+        "WebsocketPort": 80
     },
     "TeamSettings": {
         "SiteName": "Mattermost",
@@ -39,8 +42,8 @@
         "AtRestEncryptKey": "7rAh6iwQCkV4cA1Gsg3fgGOXJAQ43QVg"
     },
     "LogSettings": {
-        "EnableConsole": false,
-        "ConsoleLevel": "INFO",
+        "EnableConsole": true,
+        "ConsoleLevel": "DEBUG",
         "EnableFile": true,
         "FileLevel": "INFO",
         "FileFormat": "",
@@ -48,14 +51,14 @@
     },
     "FileSettings": {
         "DriverName": "local",
-        "Directory": "/mattermost/data/",
+        "Directory": "./data/",
         "EnablePublicLink": true,
         "PublicLinkSalt": "A705AklYF8MFDOfcwh3I488G8vtLlVip",
         "ThumbnailWidth": 120,
         "ThumbnailHeight": 100,
         "PreviewWidth": 1024,
         "PreviewHeight": 0,
-        "ProfileWidth": 128,
+		"ProfileWidth": 128,
         "ProfileHeight": 128,
         "InitialFont": "luximbi.ttf",
         "AmazonS3AccessKeyId": "",
@@ -112,5 +115,36 @@
         "AuthEndpoint": "",
         "TokenEndpoint": "",
         "UserApiEndpoint": ""
+    },
+    "GoogleSettings": {
+        "Enable": false,
+        "Secret": "",
+        "Id": "",
+        "Scope": "",
+        "AuthEndpoint": "",
+        "TokenEndpoint": "",
+        "UserApiEndpoint": ""
+    },
+    "ADFSSettings": {
+        "Enable": false,
+        "RelyingPartyIdentifier": "",
+        "Id": "",
+        "AuthEndpoint": "",
+        "TokenEndpoint": "",
+        "PubKey": ""
+    },
+    "LdapSettings": {
+        "Enable": false,
+        "LdapServer": null,
+        "LdapPort": 389,
+        "BaseDN": null,
+        "BindUsername": null,
+        "BindPassword": null,
+        "FirstNameAttribute": null,
+        "LastNameAttribute": null,
+        "EmailAttribute": null,
+        "UsernameAttribute": null,
+        "IdAttribute": null,
+        "QueryTimeout": 60
     }
 }

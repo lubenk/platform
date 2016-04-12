@@ -96,9 +96,10 @@ func signupTeam(c *Context, w http.ResponseWriter, r *http.Request) {
 func createTeamFromSSO(c *Context, w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	service := params["service"]
-
+	adfs := utils.Cfg.GetSSOServiceADFS(service)
 	sso := utils.Cfg.GetSSOService(service)
-	if sso != nil && !sso.Enable {
+
+	if (sso != nil && !sso.Enable) && (adfs != nil && !adfs.Enable) {
 		c.SetInvalidParam("createTeamFromSSO", "service")
 		return
 	}

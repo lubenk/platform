@@ -130,6 +130,24 @@ class SSOSignUpPage extends React.Component {
                     </span>
                 </a>
             );
+        } else if (this.props.service === Constants.ADFS_SERVICE) {
+            button = (
+                <a
+                    className='btn btn-custom-login adfs btn-full'
+                    key='adfs'
+                    href='#'
+                    onClick={this.handleSubmit}
+                    disabled={disabled}
+                >
+                    <span className='icon'/>
+                    <span>
+                        <FormattedMessage
+                            id='sso_signup.ADFS'
+                            defaultMessage='Create team with ADFS Account'
+                        />
+                    </span>
+                </a>
+            );
         }
 
         return (

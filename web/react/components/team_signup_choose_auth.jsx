@@ -34,6 +34,30 @@ export default class ChooseAuthPage extends React.Component {
             );
         }
 
+        if (global.window.mm_config.EnableSignUpWithADFS === 'true') {
+            buttons.push(
+                    <a
+                        className='btn btn-custom-login adfs btn-full'
+                        key='adfs'
+                        href='#'
+                        onClick={
+                            function clickGit(e) {
+                                e.preventDefault();
+                                this.props.updatePage('adfs');
+                            }.bind(this)
+                        }
+                    >
+                        <span className='icon'/>
+                        <span>
+                            <FormattedMessage
+                                id='choose_auth_page.ADFSCreate'
+                                defaultMessage='Create new team with ADFS Account'
+                            />
+                        </span>
+                    </a>
+            );
+        }
+
         if (global.window.mm_config.EnableSignUpWithGoogle === 'true') {
             buttons.push(
                     <a
