@@ -774,7 +774,7 @@ class UserSettingsGeneralTab extends React.Component {
                         aria-label={formatMessage(holders.close)}
                         onClick={this.props.closeModal}
                     >
-                        <span aria-hidden='true'>X</span>
+                        <span aria-hidden='true'>{'×'}</span>
                     </button>
                     <h4
                         className='modal-title'
