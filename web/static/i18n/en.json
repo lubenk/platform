@@ -103,7 +103,7 @@
   "admin.gitlab.userDescription": "Enter https://<your-gitlab-url>/api/v3/user.   Make sure you use HTTP or HTTPS in your URL depending on your server configuration.",
   "admin.gitlab.userExample": "Ex \"\"",
   "admin.gitlab.userTitle": "User API Endpoint:",
-  "admin.adfs.EnableHtmlDesc": "You Will need to setup your ADFS 3.0 server to accepted OAUTH2 with redirect url: <your-mattermost-url>/signup/adfs/complete/ <br>For a guide you can visit: http://www.gi-architects.co.uk/2016/04/enable-adfs-oauth2-for-mattermost-2-1/",
+  "admin.adfs.EnableHtmlDesc": "You Will need to setup your ADFS 3.0 server to accepted OAUTH2 with redirect url: <your-mattermost-url>/signup/adfs/complete <br>For a guide you can visit: http://www.gi-architects.co.uk/2016/04/enable-adfs-oauth2-for-mattermost-2-1/",
   "admin.adfs.authDescription": "Enter https://<your-adfs-url>/adfs/oauth2/authorize",
   "admin.adfs.authExample": "Ex \"https://adfsserver.local/adfs/oauth2/authorize\"",
   "admin.adfs.authTitle": "Auth Endpoint:",
