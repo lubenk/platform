@@ -5,18 +5,18 @@ package api
 
 import (
 	"fmt"
-	"html/template"
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
 	l4g "github.com/alecthomas/log4go"
+	"github.com/gorilla/mux"
+	goi18n "github.com/nicksnyder/go-i18n/i18n"
+
 	"github.com/mattermost/platform/model"
 	"github.com/mattermost/platform/store"
 	"github.com/mattermost/platform/utils"
-	goi18n "github.com/nicksnyder/go-i18n/i18n"
 )
 
 var sessionCache *utils.Cache = utils.NewLru(model.SESSION_CACHE_SIZE)
@@ -31,61 +31,57 @@ var allowedMethods []string = []string{
 }
 
 type Context struct {
-	Session           model.Session
-	RequestId         string
-	IpAddress         string
-	Path              string
-	Err               *model.AppError
-	teamURLValid      bool
-	teamURL           string
-	siteURL           string
-	SessionTokenIndex int64
-	T                 goi18n.TranslateFunc
-	Locale            string
-}
-
-type Page struct {
-	TemplateName      string
-	Props             map[string]string
-	Extra             map[string]string
-	Html              map[string]template.HTML
-	ClientCfg         map[string]string
-	ClientLicense     map[string]string
-	User              *model.User
-	Team              *model.Team
-	Channel           *model.Channel
-	Preferences       *model.Preferences
-	PostID            string
-	SessionTokenIndex int64
-	Locale            string
+	Session      model.Session
+	RequestId    string
+	IpAddress    string
+	Path         string
+	Err          *model.AppError
+	teamURLValid bool
+	teamURL      string
+	siteURL      string
+	T            goi18n.TranslateFunc
+	Locale       string
+	TeamId       string
 }
 
 func ApiAppHandler(h func(*Context, http.ResponseWriter, *http.Request)) http.Handler {
-	return &handler{h, false, false, true, false, false}
+	return &handler{h, false, false, true, false, false, false}
 }
 
 func AppHandler(h func(*Context, http.ResponseWriter, *http.Request)) http.Handler {
-	return &handler{h, false, false, false, false, false}
+	return &handler{h, false, false, false, false, false, false}
 }
 
 func AppHandlerIndependent(h func(*Context, http.ResponseWriter, *http.Request)) http.Handler {
-	return &handler{h, false, false, false, false, true}
+	return &handler{h, false, false, false, false, true, false}
 }
 
 func ApiUserRequired(h func(*Context, http.ResponseWriter, *http.Request)) http.Handler {
-	return &handler{h, true, false, true, true, false}
+	return &handler{h, true, false, true, true, false, false}
 }
 
 func ApiUserRequiredActivity(h func(*Context, http.ResponseWriter, *http.Request), isUserActivity bool) http.Handler {
-	return &handler{h, true, false, true, isUserActivity, false}
+	return &handler{h, true, false, true, isUserActivity, false, false}
 }
 
 func UserRequired(h func(*Context, http.ResponseWriter, *http.Request)) http.Handler {
-	return &handler{h, true, false, false, false, false}
+	return &handler{h, true, false, false, false, false, false}
 }
 
 func ApiAdminSystemRequired(h func(*Context, http.ResponseWriter, *http.Request)) http.Handler {
-	return &handler{h, true, true, true, false, false}
+	return &handler{h, true, true, true, false, false, false}
+}
+
+func ApiAppHandlerTrustRequester(h func(*Context, http.ResponseWriter, *http.Request)) http.Handler {
+	return &handler{h, false, false, true, false, false, true}
+}
+
+func ApiUserRequiredTrustRequester(h func(*Context, http.ResponseWriter, *http.Request)) http.Handler {
+	return &handler{h, true, false, true, true, false, true}
+}
+
+func ApiAppHandlerTrustRequesterIndependent(h func(*Context, http.ResponseWriter, *http.Request)) http.Handler {
+	return &handler{h, false, false, true, false, true, true}
 }
 
 type handler struct {
@@ -95,6 +91,7 @@ type handler struct {
 	isApi              bool
 	isUserActivity     bool
 	isTeamIndependent  bool
+	trustRequester     bool
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -104,6 +101,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.T, c.Locale = utils.GetTranslationsAndLocale(w, r)
 	c.RequestId = model.NewId()
 	c.IpAddress = GetIpAddress(r)
+	c.TeamId = mux.Vars(r)["team_id"]
+	h.isApi = IsApiCall(r)
 
 	token := ""
 	isTokenFromQueryString := false
@@ -121,37 +120,15 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Attempt to parse the token from the cookie
 	if len(token) == 0 {
-		tokens := GetMultiSessionCookieTokens(r)
-		if len(tokens) > 0 {
-			// If there is only 1 token in the cookie then just use it like normal
-			if len(tokens) == 1 {
-				token = tokens[0]
-			} else {
-				// If it is a multi-session token then find the correct session
-				sessionTokenIndexStr := r.URL.Query().Get(model.SESSION_TOKEN_INDEX)
-				sessionTokenIndex := int64(-1)
-				if len(sessionTokenIndexStr) > 0 {
-					if index, err := strconv.ParseInt(sessionTokenIndexStr, 10, 64); err == nil {
-						sessionTokenIndex = index
-					}
-				} else {
-					sessionTokenIndexStr := r.Header.Get(model.HEADER_MM_SESSION_TOKEN_INDEX)
-					if len(sessionTokenIndexStr) > 0 {
-						if index, err := strconv.ParseInt(sessionTokenIndexStr, 10, 64); err == nil {
-							sessionTokenIndex = index
-						}
-					}
-				}
+		if cookie, err := r.Cookie(model.SESSION_COOKIE_TOKEN); err == nil {
+			token = cookie.Value
 
-				if sessionTokenIndex >= 0 && sessionTokenIndex < int64(len(tokens)) {
-					token = tokens[sessionTokenIndex]
-					c.SessionTokenIndex = sessionTokenIndex
-				} else {
-					c.SessionTokenIndex = -1
+			if (h.requireSystemAdmin || h.requireUser) && !h.trustRequester {
+				if r.Header.Get(model.HEADER_REQUESTED_WITH) != model.HEADER_REQUESTED_WITH_XML {
+					c.Err = model.NewLocAppError("ServeHTTP", "api.context.session_expired.app_error", nil, "token="+token+" Appears to bea CSRF attempt")
+					token = ""
 				}
 			}
-		} else {
-			c.SessionTokenIndex = -1
 		}
 	}
 
@@ -185,8 +162,10 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		if session == nil || session.IsExpired() {
 			c.RemoveSessionCookie(w, r)
-			c.Err = model.NewLocAppError("ServeHTTP", "api.context.session_expired.app_error", nil, "token="+token)
-			c.Err.StatusCode = http.StatusUnauthorized
+			if h.requireUser || h.requireSystemAdmin {
+				c.Err = model.NewLocAppError("ServeHTTP", "api.context.session_expired.app_error", nil, "token="+token)
+				c.Err.StatusCode = http.StatusUnauthorized
+			}
 		} else if !session.IsOAuth && isTokenFromQueryString {
 			c.Err = model.NewLocAppError("ServeHTTP", "api.context.token_provided.app_error", nil, "token="+token)
 			c.Err.StatusCode = http.StatusUnauthorized
@@ -210,6 +189,10 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if c.Err == nil && h.requireSystemAdmin {
 		c.SystemAdminRequired()
+	}
+
+	if c.Err == nil && len(c.TeamId) > 0 && !h.isTeamIndependent {
+		c.HasPermissionsToTeam(c.TeamId, "TeamRoute")
 	}
 
 	if c.Err == nil && h.isUserActivity && token != "" && len(c.Session.UserId) > 0 {
@@ -297,7 +280,7 @@ func (c *Context) LogAuditWithUserId(userId, extraInfo string) {
 
 func (c *Context) LogError(err *model.AppError) {
 	l4g.Error(utils.T("api.context.log.error"), c.Path, err.Where, err.StatusCode,
-		c.RequestId, c.Session.UserId, c.IpAddress, err.Message, err.DetailedError)
+		c.RequestId, c.Session.UserId, c.IpAddress, err.SystemMessage(utils.T), err.DetailedError)
 }
 
 func (c *Context) UserRequired() {
@@ -338,13 +321,14 @@ func (c *Context) HasPermissionsToUser(userId string, where string) bool {
 }
 
 func (c *Context) HasPermissionsToTeam(teamId string, where string) bool {
-	if c.Session.TeamId == teamId {
+	if c.IsSystemAdmin() {
 		return true
 	}
 
-	// You're a mattermost system admin and you're on the VPN
-	if c.IsSystemAdmin() {
-		return true
+	for _, teamMember := range c.Session.TeamMembers {
+		if teamId == teamMember.TeamId {
+			return true
+		}
 	}
 
 	c.Err = model.NewLocAppError(where, "api.context.permissions.app_error", nil, "userId="+c.Session.UserId+", teamId="+teamId)
@@ -383,29 +367,20 @@ func (c *Context) IsSystemAdmin() bool {
 }
 
 func (c *Context) IsTeamAdmin() bool {
-	if model.IsInRole(c.Session.Roles, model.ROLE_TEAM_ADMIN) || c.IsSystemAdmin() {
+
+	if c.IsSystemAdmin() {
 		return true
 	}
-	return false
+
+	teamMember := c.Session.GetTeamByTeamId(c.TeamId)
+	if teamMember == nil {
+		return false
+	}
+
+	return teamMember.IsTeamAdmin()
 }
 
 func (c *Context) RemoveSessionCookie(w http.ResponseWriter, r *http.Request) {
-
-	// multiToken := ""
-	// if oldMultiCookie, err := r.Cookie(model.SESSION_COOKIE_TOKEN); err == nil {
-	// 	multiToken = oldMultiCookie.Value
-	// }
-
-	// multiCookie := &http.Cookie{
-	// 	Name:     model.SESSION_COOKIE_TOKEN,
-	// 	Value:    strings.TrimSpace(strings.Replace(multiToken, c.Session.Token, "", -1)),
-	// 	Path:     "/",
-	// 	MaxAge:   model.SESSION_TIME_WEB_IN_SECS,
-	// 	HttpOnly: true,
-	// }
-
-	//http.SetCookie(w, multiCookie)
-
 	cookie := &http.Cookie{
 		Name:     model.SESSION_COOKIE_TOKEN,
 		Value:    "",
@@ -418,8 +393,13 @@ func (c *Context) RemoveSessionCookie(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Context) SetInvalidParam(where string, name string) {
-	c.Err = model.NewLocAppError(where, "api.context.invalid_param.app_error", map[string]interface{}{"Name": name}, "")
-	c.Err.StatusCode = http.StatusBadRequest
+	c.Err = NewInvalidParamError(where, name)
+}
+
+func NewInvalidParamError(where string, name string) *model.AppError {
+	err := model.NewLocAppError(where, "api.context.invalid_param.app_error", map[string]interface{}{"Name": name}, "")
+	err.StatusCode = http.StatusBadRequest
+	return err
 }
 
 func (c *Context) SetUnknownError(where string, details string) {
@@ -432,7 +412,7 @@ func (c *Context) setTeamURL(url string, valid bool) {
 }
 
 func (c *Context) SetTeamURLFromSession() {
-	if result := <-Srv.Store.Team().Get(c.Session.TeamId); result.Err == nil {
+	if result := <-Srv.Store.Team().Get(c.TeamId); result.Err == nil {
 		c.setTeamURL(c.GetSiteURL()+"/"+result.Data.(*model.Team).Name, true)
 	}
 }
@@ -459,6 +439,10 @@ func (c *Context) GetSiteURL() string {
 	return c.siteURL
 }
 
+func IsApiCall(r *http.Request) bool {
+	return strings.Index(r.URL.Path, "/api/") == 0
+}
+
 func GetIpAddress(r *http.Request) string {
 	address := r.Header.Get(model.HEADER_FORWARDED)
 
@@ -473,95 +457,103 @@ func GetIpAddress(r *http.Request) string {
 	return address
 }
 
-func IsTestDomain(r *http.Request) bool {
+// func IsTestDomain(r *http.Request) bool {
 
-	if strings.Index(r.Host, "localhost") == 0 {
-		return true
-	}
+// 	if strings.Index(r.Host, "localhost") == 0 {
+// 		return true
+// 	}
 
-	if strings.Index(r.Host, "dockerhost") == 0 {
-		return true
-	}
+// 	if strings.Index(r.Host, "dockerhost") == 0 {
+// 		return true
+// 	}
 
-	if strings.Index(r.Host, "test") == 0 {
-		return true
-	}
+// 	if strings.Index(r.Host, "test") == 0 {
+// 		return true
+// 	}
 
-	if strings.Index(r.Host, "127.0.") == 0 {
-		return true
-	}
+// 	if strings.Index(r.Host, "127.0.") == 0 {
+// 		return true
+// 	}
 
-	if strings.Index(r.Host, "192.168.") == 0 {
-		return true
-	}
+// 	if strings.Index(r.Host, "192.168.") == 0 {
+// 		return true
+// 	}
 
-	if strings.Index(r.Host, "10.") == 0 {
-		return true
-	}
+// 	if strings.Index(r.Host, "10.") == 0 {
+// 		return true
+// 	}
 
-	if strings.Index(r.Host, "176.") == 0 {
-		return true
-	}
+// 	if strings.Index(r.Host, "176.") == 0 {
+// 		return true
+// 	}
 
-	return false
-}
+// 	return false
+// }
 
-func IsBetaDomain(r *http.Request) bool {
+// func IsBetaDomain(r *http.Request) bool {
 
-	if strings.Index(r.Host, "beta") == 0 {
-		return true
-	}
+// 	if strings.Index(r.Host, "beta") == 0 {
+// 		return true
+// 	}
 
-	if strings.Index(r.Host, "ci") == 0 {
-		return true
-	}
+// 	if strings.Index(r.Host, "ci") == 0 {
+// 		return true
+// 	}
 
-	return false
-}
+// 	return false
+// }
 
-var privateIpAddress = []*net.IPNet{
-	{IP: net.IPv4(10, 0, 0, 1), Mask: net.IPv4Mask(255, 0, 0, 0)},
-	{IP: net.IPv4(176, 16, 0, 1), Mask: net.IPv4Mask(255, 255, 0, 0)},
-	{IP: net.IPv4(192, 168, 0, 1), Mask: net.IPv4Mask(255, 255, 255, 0)},
-	{IP: net.IPv4(127, 0, 0, 1), Mask: net.IPv4Mask(255, 255, 255, 252)},
-}
+// var privateIpAddress = []*net.IPNet{
+// 	{IP: net.IPv4(10, 0, 0, 1), Mask: net.IPv4Mask(255, 0, 0, 0)},
+// 	{IP: net.IPv4(176, 16, 0, 1), Mask: net.IPv4Mask(255, 255, 0, 0)},
+// 	{IP: net.IPv4(192, 168, 0, 1), Mask: net.IPv4Mask(255, 255, 255, 0)},
+// 	{IP: net.IPv4(127, 0, 0, 1), Mask: net.IPv4Mask(255, 255, 255, 252)},
+// }
 
-func IsPrivateIpAddress(ipAddress string) bool {
+// func IsPrivateIpAddress(ipAddress string) bool {
 
-	for _, pips := range privateIpAddress {
-		if pips.Contains(net.ParseIP(ipAddress)) {
-			return true
-		}
-	}
+// 	for _, pips := range privateIpAddress {
+// 		if pips.Contains(net.ParseIP(ipAddress)) {
+// 			return true
+// 		}
+// 	}
 
-	return false
-}
+// 	return false
+// }
 
 func RenderWebError(err *model.AppError, w http.ResponseWriter, r *http.Request) {
-	props := make(map[string]string)
-	props["Message"] = err.Message
-	props["Details"] = err.DetailedError
-
-	pathParts := strings.Split(r.URL.Path, "/")
-	if len(pathParts) > 1 {
-		props["SiteURL"] = GetProtocol(r) + "://" + r.Host + "/" + pathParts[1]
-	} else {
-		props["SiteURL"] = GetProtocol(r) + "://" + r.Host
-	}
-
 	T, _ := utils.GetTranslationsAndLocale(w, r)
-	props["Title"] = T("api.templates.error.title", map[string]interface{}{"SiteName": utils.ClientCfg["SiteName"]})
-	props["Link"] = T("api.templates.error.link")
 
-	w.WriteHeader(err.StatusCode)
-	ServerTemplates.ExecuteTemplate(w, "error.html", Page{Props: props, ClientCfg: utils.ClientCfg})
+	title := T("api.templates.error.title", map[string]interface{}{"SiteName": utils.ClientCfg["SiteName"]})
+	message := err.Message
+	details := err.DetailedError
+	link := "/"
+	linkMessage := T("api.templates.error.link")
+
+	http.Redirect(
+		w,
+		r,
+		"/error?title="+url.QueryEscape(title)+
+			"&message="+url.QueryEscape(message)+
+			"&details="+url.QueryEscape(details)+
+			"&link="+url.QueryEscape(link)+
+			"&linkmessage="+url.QueryEscape(linkMessage),
+		http.StatusTemporaryRedirect)
 }
 
 func Handle404(w http.ResponseWriter, r *http.Request) {
 	err := model.NewLocAppError("Handle404", "api.context.404.app_error", nil, "")
+	err.Translate(utils.T)
 	err.StatusCode = http.StatusNotFound
 	l4g.Error("%v: code=404 ip=%v", r.URL.Path, GetIpAddress(r))
-	RenderWebError(err, w, r)
+
+	if IsApiCall(r) {
+		w.WriteHeader(err.StatusCode)
+		err.DetailedError = "There doesn't appear to be an api call for the url='" + r.URL.Path + "'.  Typo? are you missing a team_id or user_id as part of the url?"
+		w.Write([]byte(err.ToJson()))
+	} else {
+		RenderWebError(err, w, r)
+	}
 }
 
 func GetSession(token string) *model.Session {
@@ -588,27 +580,18 @@ func GetSession(token string) *model.Session {
 	return session
 }
 
-func GetMultiSessionCookieTokens(r *http.Request) []string {
-	if multiCookie, err := r.Cookie(model.SESSION_COOKIE_TOKEN); err == nil {
-		multiToken := multiCookie.Value
+func RemoveAllSessionsForUserId(userId string) {
 
-		if len(multiToken) > 0 {
-			return strings.Split(multiToken, " ")
+	keys := sessionCache.Keys()
+
+	for _, key := range keys {
+		if ts, ok := sessionCache.Get(key); ok {
+			session := ts.(*model.Session)
+			if session.UserId == userId {
+				sessionCache.Remove(key)
+			}
 		}
 	}
-
-	return []string{}
-}
-
-func FindMultiSessionForTeamId(r *http.Request, teamId string) (int64, *model.Session) {
-	for index, token := range GetMultiSessionCookieTokens(r) {
-		s := GetSession(token)
-		if s != nil && !s.IsExpired() && s.TeamId == teamId {
-			return int64(index), s
-		}
-	}
-
-	return -1, nil
 }
 
 func AddSessionToCache(session *model.Session) {

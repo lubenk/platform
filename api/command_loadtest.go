@@ -49,6 +49,11 @@ var usage = `Mattermost load testing commands to help configure the system
 		Example:
 			/loadtest http://www.example.com/sample_file.md
 
+	Json - Add a post using the JSON file as payload to the current channel.
+	        /loadtest json url
+
+		Example
+		/loadtest json http://www.example.com/sample_body.json
 
 `
 
@@ -105,7 +110,9 @@ func (me *LoadTestProvider) DoCommand(c *Context, channelId string, message stri
 	if strings.HasPrefix(message, "url") {
 		return me.UrlCommand(c, channelId, message)
 	}
-
+	if strings.HasPrefix(message, "json") {
+		return me.JsonCommand(c, channelId, message)
+	}
 	return me.HelpCommand(c, channelId, message)
 }
 
@@ -157,7 +164,7 @@ func (me *LoadTestProvider) SetupCommand(c *Context, channelId string, message s
 		if err := CreateBasicUser(client); err != nil {
 			return &model.CommandResponse{Text: "Failed to create testing environment", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
 		}
-		client.LoginByEmail(BTEST_TEAM_NAME, BTEST_USER_EMAIL, BTEST_USER_PASSWORD)
+		client.Login(BTEST_USER_EMAIL, BTEST_USER_PASSWORD)
 		environment, err := CreateTestEnvironmentWithTeams(
 			client,
 			utils.Range{numTeams, numTeams},
@@ -175,17 +182,26 @@ func (me *LoadTestProvider) SetupCommand(c *Context, channelId string, message s
 			}
 		}
 	} else {
+
+		var team *model.Team
+		if tr := <-Srv.Store.Team().Get(c.TeamId); tr.Err != nil {
+			return &model.CommandResponse{Text: "Failed to create testing environment", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
+		} else {
+			team = tr.Data.(*model.Team)
+		}
+
 		client.MockSession(c.Session.Token)
+		client.SetTeamId(c.TeamId)
 		CreateTestEnvironmentInTeam(
 			client,
-			c.Session.TeamId,
+			team,
 			utils.Range{numChannels, numChannels},
 			utils.Range{numUsers, numUsers},
 			utils.Range{numPosts, numPosts},
 			doFuzz)
 	}
 
-	return &model.CommandResponse{Text: "Creating enviroment...", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
+	return &model.CommandResponse{Text: "Created enviroment", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
 }
 
 func (me *LoadTestProvider) UsersCommand(c *Context, channelId string, message string) *model.CommandResponse {
@@ -202,12 +218,20 @@ func (me *LoadTestProvider) UsersCommand(c *Context, channelId string, message s
 		usersr = utils.Range{2, 5}
 	}
 
+	var team *model.Team
+	if tr := <-Srv.Store.Team().Get(c.TeamId); tr.Err != nil {
+		return &model.CommandResponse{Text: "Failed to create testing environment", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
+	} else {
+		team = tr.Data.(*model.Team)
+	}
+
 	client := model.NewClient(c.GetSiteURL())
-	userCreator := NewAutoUserCreator(client, c.Session.TeamId)
+	client.SetTeamId(team.Id)
+	userCreator := NewAutoUserCreator(client, team)
 	userCreator.Fuzzy = doFuzz
 	userCreator.CreateTestUsers(usersr)
 
-	return &model.CommandResponse{Text: "Adding users...", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
+	return &model.CommandResponse{Text: "Added users", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
 }
 
 func (me *LoadTestProvider) ChannelsCommand(c *Context, channelId string, message string) *model.CommandResponse {
@@ -223,13 +247,22 @@ func (me *LoadTestProvider) ChannelsCommand(c *Context, channelId string, messag
 	if err == false {
 		channelsr = utils.Range{2, 5}
 	}
+
+	var team *model.Team
+	if tr := <-Srv.Store.Team().Get(c.TeamId); tr.Err != nil {
+		return &model.CommandResponse{Text: "Failed to create testing environment", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
+	} else {
+		team = tr.Data.(*model.Team)
+	}
+
 	client := model.NewClient(c.GetSiteURL())
+	client.SetTeamId(team.Id)
 	client.MockSession(c.Session.Token)
-	channelCreator := NewAutoChannelCreator(client, c.Session.TeamId)
+	channelCreator := NewAutoChannelCreator(client, team)
 	channelCreator.Fuzzy = doFuzz
 	channelCreator.CreateTestChannels(channelsr)
 
-	return &model.CommandResponse{Text: "Adding channels...", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
+	return &model.CommandResponse{Text: "Added channels", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
 }
 
 func (me *LoadTestProvider) PostsCommand(c *Context, channelId string, message string) *model.CommandResponse {
@@ -255,7 +288,7 @@ func (me *LoadTestProvider) PostsCommand(c *Context, channelId string, message s
 	}
 
 	var usernames []string
-	if result := <-Srv.Store.User().GetProfiles(c.Session.TeamId); result.Err == nil {
+	if result := <-Srv.Store.User().GetProfiles(c.TeamId); result.Err == nil {
 		profileUsers := result.Data.(map[string]*model.User)
 		usernames = make([]string, len(profileUsers))
 		i := 0
@@ -266,6 +299,7 @@ func (me *LoadTestProvider) PostsCommand(c *Context, channelId string, message s
 	}
 
 	client := model.NewClient(c.GetSiteURL())
+	client.SetTeamId(c.TeamId)
 	client.MockSession(c.Session.Token)
 	testPoster := NewAutoPostCreator(client, channelId)
 	testPoster.Fuzzy = doFuzz
@@ -278,7 +312,7 @@ func (me *LoadTestProvider) PostsCommand(c *Context, channelId string, message s
 		testPoster.CreateRandomPost()
 	}
 
-	return &model.CommandResponse{Text: "Adding posts...", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
+	return &model.CommandResponse{Text: "Added posts", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
 }
 
 func (me *LoadTestProvider) UrlCommand(c *Context, channelId string, message string) *model.CommandResponse {
@@ -327,7 +361,43 @@ func (me *LoadTestProvider) UrlCommand(c *Context, channelId string, message str
 		}
 	}
 
-	return &model.CommandResponse{Text: "Loading data...", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
+	return &model.CommandResponse{Text: "Loaded data", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
+}
+
+func (me *LoadTestProvider) JsonCommand(c *Context, channelId string, message string) *model.CommandResponse {
+	url := strings.TrimSpace(strings.TrimPrefix(message, "json"))
+	if len(url) == 0 {
+		return &model.CommandResponse{Text: "Command must contain a url", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
+	}
+
+	// provide a shortcut to easily access tests stored in doc/developer/tests
+	if !strings.HasPrefix(url, "http") {
+		url = "https://raw.githubusercontent.com/mattermost/platform/master/tests/" + url
+
+		if path.Ext(url) == "" {
+			url += ".json"
+		}
+	}
+
+	var contents io.ReadCloser
+	if r, err := http.Get(url); err != nil {
+		return &model.CommandResponse{Text: "Unable to get file", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
+	} else if r.StatusCode > 400 {
+		return &model.CommandResponse{Text: "Unable to get file", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
+	} else {
+		contents = r.Body
+	}
+
+	post := model.PostFromJson(contents)
+	post.ChannelId = channelId
+	if post.Message == "" {
+		post.Message = message
+	}
+
+	if _, err := CreatePost(c, post, false); err != nil {
+		return &model.CommandResponse{Text: "Unable to create post", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
+	}
+	return &model.CommandResponse{Text: "Loaded data", ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL}
 }
 
 func parseRange(command string, cmd string) (utils.Range, bool) {

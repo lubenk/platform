@@ -38,11 +38,6 @@ func NewSqlPostStore(sqlStore *SqlStore) PostStore {
 }
 
 func (s SqlPostStore) UpgradeSchemaIfNeeded() {
-	// ADDED for 1.3 REMOVE for 2.2
-	s.RemoveColumnIfExists("Posts", "ImgCount")
-
-	// ADDED for 1.3 REMOVE for 2.2
-	s.GetMaster().Exec(`UPDATE Preferences SET Type = :NewType WHERE Type = :CurrentType`, map[string]string{"NewType": model.POST_JOIN_LEAVE, "CurrentType": "join_leave"})
 }
 
 func (s SqlPostStore) CreateIndexesIfNotExists() {
@@ -657,7 +652,7 @@ func (s SqlPostStore) Search(teamId string, userId string, params *model.SearchP
 						ChannelMembers
 					WHERE
 						Id = ChannelId
-							AND TeamId = :TeamId
+							AND (TeamId = :TeamId OR TeamId = '')
 							AND UserId = :UserId
 							AND DeleteAt = 0
 							CHANNEL_FILTER)
@@ -698,9 +693,11 @@ func (s SqlPostStore) Search(teamId string, userId string, params *model.SearchP
 					SELECT
 						Id
 					FROM
-						Users
+						Users,
+						TeamMembers
 					WHERE
-						TeamId = :TeamId
+						TeamMembers.TeamId = :TeamId
+						AND Users.Id = TeamMembers.UserId
 						AND Username IN (`+inClause+`))`, 1)
 		} else if len(params.FromUsers) == 1 {
 			queryParams["FromUser"] = params.FromUsers[0]
@@ -709,9 +706,11 @@ func (s SqlPostStore) Search(teamId string, userId string, params *model.SearchP
 					SELECT
 						Id
 					FROM
-						Users
+						Users,
+						TeamMembers
 					WHERE
-						TeamId = :TeamId
+						TeamMembers.TeamId = :TeamId
+						AND Users.Id = TeamMembers.UserId
 						AND Username = :FromUser)`, 1)
 		} else {
 			searchQuery = strings.Replace(searchQuery, "POST_FILTER", "", 1)
@@ -726,13 +725,26 @@ func (s SqlPostStore) Search(teamId string, userId string, params *model.SearchP
 				terms = wildcard.ReplaceAllLiteralString(terms, ":* ")
 			}
 
-			terms = strings.Join(strings.Fields(terms), " | ")
+			if params.OrTerms {
+				terms = strings.Join(strings.Fields(terms), " | ")
+			} else {
+				terms = strings.Join(strings.Fields(terms), " & ")
+			}
 
 			searchClause := fmt.Sprintf("AND %s @@  to_tsquery(:Terms)", searchType)
 			searchQuery = strings.Replace(searchQuery, "SEARCH_CLAUSE", searchClause, 1)
 		} else if utils.Cfg.SqlSettings.DriverName == model.DATABASE_DRIVER_MYSQL {
 			searchClause := fmt.Sprintf("AND MATCH (%s) AGAINST (:Terms IN BOOLEAN MODE)", searchType)
 			searchQuery = strings.Replace(searchQuery, "SEARCH_CLAUSE", searchClause, 1)
+
+			if !params.OrTerms {
+				splitTerms := strings.Fields(terms)
+				for i, t := range strings.Fields(terms) {
+					splitTerms[i] = "+" + t
+				}
+
+				terms = strings.Join(splitTerms, " ")
+			}
 		}
 
 		queryParams["Terms"] = terms

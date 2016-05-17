@@ -58,7 +58,7 @@ func (m *memStatsLimiter) Start() {
 // at regular intervals.
 func (m *memStatsLimiter) refresh() {
 	c := time.Tick(m.refreshRate)
-	for range c {
+	for _ = range c {
 		m.lockStats.Lock()
 		runtime.ReadMemStats(&m.stats)
 		m.lockStats.Unlock()

@@ -1,0 +1,100 @@
+@charset 'UTF-8';
+
+@media screen and (max-width: 960px) {
+    .signup-team__container {
+        &.branded {
+            display: block;
+            margin: 0 auto;
+            max-width: 380px;
+
+            .signup__markdown {
+                display: none;
+            }
+        }
+    }
+
+    .sidebar--right {
+        @include single-transition(all, .5s, ease);
+        @include translateX(100%);
+        z-index: 5;
+
+        &.move--left {
+            -webkit-transform: translateX(0) !important;
+            -moz-transform: translateX(0) !important;
+            -ms-transform: translateX(0) !important;
+            -o-transform: translateX(0) !important;
+            transform: translateX(0) !important;
+
+            .search-bar__container {
+                padding-right: 8px;
+            }
+        }
+    }
+
+    .backstage-content {
+        margin: 30px;
+        max-width: 100%;
+        padding: 0;
+    }
+
+    .backstage-sidebar {
+        height: auto;
+        padding: 30px 15px 0;
+        position: relative;
+        width: 100%;
+    }
+
+    .help__format-text {
+        display: none;
+    }
+
+    .inner-wrap {
+        &:not(.move--left) {
+            margin-right: 0 !important;
+        }
+
+        &.move--left {
+            margin-right: 0 !important;
+
+            .channel-header__links {
+                position: relative;
+                right: auto;
+                top: auto;
+            }
+        }
+    }
+}
+
+@media screen and (min-width: 768px) {
+    .second-bar {
+        display: none;
+    }
+
+    .sidebar--right {
+        &.move--left {
+            @include translateX(0);
+        }
+    }
+
+    .inner-wrap {
+        &.move--left {
+            margin-right: 400px;
+        }
+    }
+
+    .post {
+        &.same--root {
+            &.same--user {
+                .post__time {
+                    @include opacity(0);
+                    font-size: 11px;
+                    left: -4px;
+                    line-height: 37px;
+                    position: absolute;
+                    text-rendering: auto;
+                    top: -2px;
+                }
+            }
+        }
+    }
+}

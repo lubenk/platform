@@ -13,7 +13,9 @@ import (
 )
 
 func BenchmarkUploadFile(b *testing.B) {
-	_, _, channel := SetupBenchmark()
+	th := Setup().InitBasic()
+	Client := th.BasicClient
+	channel := th.BasicChannel
 
 	testPoster := NewAutoPostCreator(Client, channel.Id)
 
@@ -25,7 +27,10 @@ func BenchmarkUploadFile(b *testing.B) {
 }
 
 func BenchmarkGetFile(b *testing.B) {
-	team, _, channel := SetupBenchmark()
+	th := Setup().InitBasic()
+	Client := th.BasicClient
+	team := th.BasicTeam
+	channel := th.BasicChannel
 
 	testPoster := NewAutoPostCreator(Client, channel.Id)
 	filenames, err := testPoster.UploadTestFile()
@@ -53,7 +58,9 @@ func BenchmarkGetFile(b *testing.B) {
 }
 
 func BenchmarkGetPublicLink(b *testing.B) {
-	_, _, channel := SetupBenchmark()
+	th := Setup().InitBasic()
+	Client := th.BasicClient
+	channel := th.BasicChannel
 
 	testPoster := NewAutoPostCreator(Client, channel.Id)
 	filenames, err := testPoster.UploadTestFile()
@@ -61,16 +68,13 @@ func BenchmarkGetPublicLink(b *testing.B) {
 		b.Fatal("Unable to upload file for benchmark")
 	}
 
-	data := make(map[string]string)
-	data["filename"] = filenames[0]
-
 	// wait a bit for files to ready
 	time.Sleep(5 * time.Second)
 
 	// Benchmark Start
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, downErr := Client.GetPublicLink(data); downErr != nil {
+		if _, downErr := Client.GetPublicLink(filenames[0]); downErr != nil {
 			b.Fatal(downErr)
 		}
 	}

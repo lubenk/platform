@@ -11,6 +11,10 @@ import (
 const (
 	PUSH_NOTIFY_APPLE   = "apple"
 	PUSH_NOTIFY_ANDROID = "android"
+
+	CATEGORY_DM = "DIRECT_MESSAGE"
+
+	MHPNS = "https://push.mattermost.com"
 )
 
 type PushNotification struct {
@@ -22,6 +26,8 @@ type PushNotification struct {
 	Message          string `json:"message"`
 	Badge            int    `json:"badge"`
 	ContentAvailable int    `json:"cont_ava"`
+	ChannelId        string `json:"channel_id"`
+	ChannelName      string `json:"channel_name"`
 }
 
 func (me *PushNotification) ToJson() string {

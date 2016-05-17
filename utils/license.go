@@ -5,11 +5,13 @@ package utils
 
 import (
 	"crypto"
+	"crypto/md5"
 	"crypto/rsa"
 	"crypto/sha512"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -19,8 +21,10 @@ import (
 )
 
 var IsLicensed bool = false
-var License *model.License = &model.License{}
-var ClientLicense map[string]string = make(map[string]string)
+var License *model.License = &model.License{
+	Features: new(model.Features),
+}
+var ClientLicense map[string]string = map[string]string{"IsLicensed": "false"}
 
 var publicKey []byte = []byte(`-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyZmShlU8Z8HdG0IWSZ8r
@@ -49,6 +53,7 @@ func SetLicense(license *model.License) bool {
 		License = license
 		IsLicensed = true
 		ClientLicense = getClientLicense(license)
+		ClientCfg = getClientConfig(Cfg)
 		return true
 	}
 
@@ -59,6 +64,7 @@ func RemoveLicense() {
 	License = &model.License{}
 	IsLicensed = false
 	ClientLicense = getClientLicense(License)
+	ClientCfg = getClientConfig(Cfg)
 }
 
 func ValidateLicense(signed []byte) (bool, string) {
@@ -114,7 +120,11 @@ func getClientLicense(l *model.License) map[string]string {
 	if IsLicensed {
 		props["Users"] = strconv.Itoa(*l.Features.Users)
 		props["LDAP"] = strconv.FormatBool(*l.Features.LDAP)
+		props["MFA"] = strconv.FormatBool(*l.Features.MFA)
 		props["GoogleSSO"] = strconv.FormatBool(*l.Features.GoogleSSO)
+		props["Compliance"] = strconv.FormatBool(*l.Features.Compliance)
+		props["CustomBrand"] = strconv.FormatBool(*l.Features.CustomBrand)
+		props["MHPNS"] = strconv.FormatBool(*l.Features.MHPNS)
 		props["IssuedAt"] = strconv.FormatInt(l.IssuedAt, 10)
 		props["StartsAt"] = strconv.FormatInt(l.StartsAt, 10)
 		props["ExpiresAt"] = strconv.FormatInt(l.ExpiresAt, 10)
@@ -125,4 +135,14 @@ func getClientLicense(l *model.License) map[string]string {
 	}
 
 	return props
+}
+
+func GetClientLicenseEtag() string {
+	value := ""
+
+	for k, v := range ClientLicense {
+		value += fmt.Sprintf("%s:%s;", k, v)
+	}
+
+	return model.Etag(fmt.Sprintf("%x", md5.Sum([]byte(value))))
 }

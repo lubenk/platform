@@ -41,6 +41,33 @@ func TestUserPreUpdate(t *testing.T) {
 	user.PreUpdate()
 }
 
+func TestUserUpdateMentionKeysFromUsername(t *testing.T) {
+	user := User{Username: "user"}
+	user.SetDefaultNotifications()
+
+	if user.NotifyProps["mention_keys"] != "user,@user" {
+		t.Fatal("default mention keys are invalid: %v", user.NotifyProps["mention_keys"])
+	}
+
+	user.Username = "person"
+	user.UpdateMentionKeysFromUsername("user")
+	if user.NotifyProps["mention_keys"] != "person,@person" {
+		t.Fatal("mention keys are invalid after changing username: %v", user.NotifyProps["mention_keys"])
+	}
+
+	user.NotifyProps["mention_keys"] += ",mention"
+	user.UpdateMentionKeysFromUsername("person")
+	if user.NotifyProps["mention_keys"] != "person,@person,mention" {
+		t.Fatal("mention keys are invalid after adding extra mention keyword: %v", user.NotifyProps["mention_keys"])
+	}
+
+	user.Username = "user"
+	user.UpdateMentionKeysFromUsername("person")
+	if user.NotifyProps["mention_keys"] != "user,@user,mention" {
+		t.Fatal("mention keys are invalid after changing username with extra mention keyword: %v", user.NotifyProps["mention_keys"])
+	}
+}
+
 func TestUserIsValid(t *testing.T) {
 	user := User{}
 
@@ -59,11 +86,6 @@ func TestUserIsValid(t *testing.T) {
 	}
 
 	user.UpdateAt = GetMillis()
-	if err := user.IsValid(); err == nil {
-		t.Fatal()
-	}
-
-	user.TeamId = NewId()
 	if err := user.IsValid(); err == nil {
 		t.Fatal()
 	}
@@ -195,11 +217,11 @@ func TestCleanUsername(t *testing.T) {
 
 func TestRoles(t *testing.T) {
 
-	if !IsValidRoles("admin") {
+	if IsValidUserRoles("admin") {
 		t.Fatal()
 	}
 
-	if IsValidRoles("junk") {
+	if IsValidUserRoles("junk") {
 		t.Fatal()
 	}
 

@@ -1,0 +1,43 @@
+@charset 'UTF-8';
+
+.btn {
+    @include single-transition(all, .25s, ease-in);
+    @include border-radius($border-rad);
+
+    &.btn-primary {
+        background: $primary-color;
+        border-color: transparent;
+
+        &:hover,
+        &:focus,
+        &:active {
+            background: $primary-color--hover;
+        }
+    }
+
+    &.btn-danger {
+        color: $white;
+
+        .app__body & {
+            color: $white;
+
+            &:hover,
+            &:focus,
+            &:active {
+                color: $white;
+            }
+        }
+
+        &:hover,
+        &:focus,
+        &:active {
+            color: $white;
+        }
+    }
+
+    &.btn-inactive {
+        background: $light-gray;
+        border-color: transparent;
+        color: $white;
+    }
+}

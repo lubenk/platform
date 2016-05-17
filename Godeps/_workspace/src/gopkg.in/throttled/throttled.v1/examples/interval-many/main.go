@@ -68,7 +68,7 @@ func main() {
 
 	// Print stats once in a while
 	go func() {
-		for range time.Tick(10 * time.Second) {
+		for _ = range time.Tick(10 * time.Second) {
 			mu.Lock()
 			log.Printf("ok: %d, ko: %d", ok, ko)
 			mu.Unlock()

@@ -5,30 +5,39 @@ package api
 
 import (
 	"bufio"
+	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	l4g "github.com/alecthomas/log4go"
 	"github.com/gorilla/mux"
-
+	"github.com/mattermost/platform/einterfaces"
 	"github.com/mattermost/platform/model"
 	"github.com/mattermost/platform/utils"
+	"github.com/mssola/user_agent"
 )
 
-func InitAdmin(r *mux.Router) {
+func InitAdmin() {
 	l4g.Debug(utils.T("api.admin.init.debug"))
 
-	sr := r.PathPrefix("/admin").Subrouter()
-	sr.Handle("/logs", ApiUserRequired(getLogs)).Methods("GET")
-	sr.Handle("/audits", ApiUserRequired(getAllAudits)).Methods("GET")
-	sr.Handle("/config", ApiUserRequired(getConfig)).Methods("GET")
-	sr.Handle("/save_config", ApiUserRequired(saveConfig)).Methods("POST")
-	sr.Handle("/test_email", ApiUserRequired(testEmail)).Methods("POST")
-	sr.Handle("/client_props", ApiAppHandler(getClientConfig)).Methods("GET")
-	sr.Handle("/log_client", ApiAppHandler(logClient)).Methods("POST")
-	sr.Handle("/analytics/{id:[A-Za-z0-9]+}/{name:[A-Za-z0-9_]+}", ApiAppHandler(getAnalytics)).Methods("GET")
-	sr.Handle("/analytics/{name:[A-Za-z0-9_]+}", ApiAppHandler(getAnalytics)).Methods("GET")
+	BaseRoutes.Admin.Handle("/logs", ApiUserRequired(getLogs)).Methods("GET")
+	BaseRoutes.Admin.Handle("/audits", ApiUserRequired(getAllAudits)).Methods("GET")
+	BaseRoutes.Admin.Handle("/config", ApiUserRequired(getConfig)).Methods("GET")
+	BaseRoutes.Admin.Handle("/save_config", ApiUserRequired(saveConfig)).Methods("POST")
+	BaseRoutes.Admin.Handle("/test_email", ApiUserRequired(testEmail)).Methods("POST")
+	BaseRoutes.Admin.Handle("/client_props", ApiAppHandler(getClientConfig)).Methods("GET")
+	BaseRoutes.Admin.Handle("/log_client", ApiAppHandler(logClient)).Methods("POST")
+	BaseRoutes.Admin.Handle("/analytics/{id:[A-Za-z0-9]+}/{name:[A-Za-z0-9_]+}", ApiUserRequired(getAnalytics)).Methods("GET")
+	BaseRoutes.Admin.Handle("/analytics/{name:[A-Za-z0-9_]+}", ApiUserRequired(getAnalytics)).Methods("GET")
+	BaseRoutes.Admin.Handle("/save_compliance_report", ApiUserRequired(saveComplianceReport)).Methods("POST")
+	BaseRoutes.Admin.Handle("/compliance_reports", ApiUserRequired(getComplianceReports)).Methods("GET")
+	BaseRoutes.Admin.Handle("/download_compliance_report/{id:[A-Za-z0-9]+}", ApiUserRequiredTrustRequester(downloadComplianceReport)).Methods("GET")
+	BaseRoutes.Admin.Handle("/upload_brand_image", ApiAdminSystemRequired(uploadBrandImage)).Methods("POST")
+	BaseRoutes.Admin.Handle("/get_brand_image", ApiAppHandlerTrustRequester(getBrandImage)).Methods("GET")
+	BaseRoutes.Admin.Handle("/reset_mfa", ApiAdminSystemRequired(adminResetMfa)).Methods("POST")
+	BaseRoutes.Admin.Handle("/reset_password", ApiAdminSystemRequired(adminResetPassword)).Methods("POST")
 }
 
 func getLogs(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -118,10 +127,11 @@ func getConfig(c *Context, w http.ResponseWriter, r *http.Request) {
 
 	json := utils.Cfg.ToJson()
 	cfg := model.ConfigFromJson(strings.NewReader(json))
-	json = cfg.ToJson()
+
+	cfg.Sanitize()
 
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Write([]byte(json))
+	w.Write([]byte(cfg.ToJson()))
 }
 
 func saveConfig(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -136,16 +146,26 @@ func saveConfig(c *Context, w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfg.SetDefaults()
+	utils.Desanitize(cfg)
 
 	if err := cfg.IsValid(); err != nil {
 		c.Err = err
 		return
 	}
 
+	if err := utils.ValidateLdapFilter(cfg); err != nil {
+		c.Err = err
+		return
+	}
+
+	c.LogAudit("")
+
 	utils.SaveConfig(utils.CfgFileName, cfg)
 	utils.LoadConfig(utils.CfgFileName)
-	json := utils.Cfg.ToJson()
-	w.Write([]byte(json))
+
+	rdata := map[string]string{}
+	rdata["status"] = "OK"
+	w.Write([]byte(model.MapToJson(rdata)))
 }
 
 func testEmail(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -172,6 +192,104 @@ func testEmail(c *Context, w http.ResponseWriter, r *http.Request) {
 	m := make(map[string]string)
 	m["SUCCESS"] = "true"
 	w.Write([]byte(model.MapToJson(m)))
+}
+
+func getComplianceReports(c *Context, w http.ResponseWriter, r *http.Request) {
+	if !c.HasSystemAdminPermissions("getComplianceReports") {
+		return
+	}
+
+	if !*utils.Cfg.ComplianceSettings.Enable || !utils.IsLicensed || !*utils.License.Features.Compliance {
+		c.Err = model.NewLocAppError("getComplianceReports", "ent.compliance.licence_disable.app_error", nil, "")
+		return
+	}
+
+	if result := <-Srv.Store.Compliance().GetAll(); result.Err != nil {
+		c.Err = result.Err
+		return
+	} else {
+		crs := result.Data.(model.Compliances)
+		w.Write([]byte(crs.ToJson()))
+	}
+}
+
+func saveComplianceReport(c *Context, w http.ResponseWriter, r *http.Request) {
+	if !c.HasSystemAdminPermissions("getComplianceReports") {
+		return
+	}
+
+	if !*utils.Cfg.ComplianceSettings.Enable || !utils.IsLicensed || !*utils.License.Features.Compliance || einterfaces.GetComplianceInterface() == nil {
+		c.Err = model.NewLocAppError("saveComplianceReport", "ent.compliance.licence_disable.app_error", nil, "")
+		return
+	}
+
+	job := model.ComplianceFromJson(r.Body)
+	if job == nil {
+		c.SetInvalidParam("saveComplianceReport", "compliance")
+		return
+	}
+
+	job.UserId = c.Session.UserId
+	job.Type = model.COMPLIANCE_TYPE_ADHOC
+
+	if result := <-Srv.Store.Compliance().Save(job); result.Err != nil {
+		c.Err = result.Err
+		return
+	} else {
+		job = result.Data.(*model.Compliance)
+		go einterfaces.GetComplianceInterface().RunComplianceJob(job)
+	}
+
+	w.Write([]byte(job.ToJson()))
+}
+
+func downloadComplianceReport(c *Context, w http.ResponseWriter, r *http.Request) {
+	if !c.HasSystemAdminPermissions("downloadComplianceReport") {
+		return
+	}
+
+	if !*utils.Cfg.ComplianceSettings.Enable || !utils.IsLicensed || !*utils.License.Features.Compliance || einterfaces.GetComplianceInterface() == nil {
+		c.Err = model.NewLocAppError("downloadComplianceReport", "ent.compliance.licence_disable.app_error", nil, "")
+		return
+	}
+
+	params := mux.Vars(r)
+
+	id := params["id"]
+	if len(id) != 26 {
+		c.SetInvalidParam("downloadComplianceReport", "id")
+		return
+	}
+
+	if result := <-Srv.Store.Compliance().Get(id); result.Err != nil {
+		c.Err = result.Err
+		return
+	} else {
+		job := result.Data.(*model.Compliance)
+		c.LogAudit("downloaded " + job.Desc)
+
+		if f, err := ioutil.ReadFile(*utils.Cfg.ComplianceSettings.Directory + "compliance/" + job.JobName() + ".zip"); err != nil {
+			c.Err = model.NewLocAppError("readFile", "api.file.read_file.reading_local.app_error", nil, err.Error())
+			return
+		} else {
+			w.Header().Set("Cache-Control", "max-age=2592000, public")
+			w.Header().Set("Content-Length", strconv.Itoa(len(f)))
+			w.Header().Del("Content-Type") // Content-Type will be set automatically by the http writer
+
+			// attach extra headers to trigger a download on IE, Edge, and Safari
+			ua := user_agent.New(r.UserAgent())
+			bname, _ := ua.Browser()
+
+			w.Header().Set("Content-Disposition", "attachment;filename=\""+job.JobName()+".zip\"")
+
+			if bname == "Edge" || bname == "Internet Explorer" || bname == "Safari" {
+				// trim off anything before the final / so we just get the file's name
+				w.Header().Set("Content-Type", "application/octet-stream")
+			}
+
+			w.Write(f)
+		}
+	}
 }
 
 func getAnalytics(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -261,7 +379,7 @@ func getAnalytics(c *Context, w http.ResponseWriter, r *http.Request) {
 		iHookChan := Srv.Store.Webhook().AnalyticsIncomingCount(teamId)
 		oHookChan := Srv.Store.Webhook().AnalyticsOutgoingCount(teamId)
 		commandChan := Srv.Store.Command().AnalyticsCommandCount(teamId)
-		sessionChan := Srv.Store.Session().AnalyticsSessionCount(teamId)
+		sessionChan := Srv.Store.Session().AnalyticsSessionCount()
 
 		if r := <-fileChan; r.Err != nil {
 			c.Err = r.Err
@@ -310,4 +428,126 @@ func getAnalytics(c *Context, w http.ResponseWriter, r *http.Request) {
 		c.SetInvalidParam("getAnalytics", "name")
 	}
 
+}
+
+func uploadBrandImage(c *Context, w http.ResponseWriter, r *http.Request) {
+	if len(utils.Cfg.FileSettings.DriverName) == 0 {
+		c.Err = model.NewLocAppError("uploadBrandImage", "api.admin.upload_brand_image.storage.app_error", nil, "")
+		c.Err.StatusCode = http.StatusNotImplemented
+		return
+	}
+
+	if r.ContentLength > model.MAX_FILE_SIZE {
+		c.Err = model.NewLocAppError("uploadBrandImage", "api.admin.upload_brand_image.too_large.app_error", nil, "")
+		c.Err.StatusCode = http.StatusRequestEntityTooLarge
+		return
+	}
+
+	if err := r.ParseMultipartForm(model.MAX_FILE_SIZE); err != nil {
+		c.Err = model.NewLocAppError("uploadBrandImage", "api.admin.upload_brand_image.parse.app_error", nil, "")
+		return
+	}
+
+	m := r.MultipartForm
+
+	imageArray, ok := m.File["image"]
+	if !ok {
+		c.Err = model.NewLocAppError("uploadBrandImage", "api.admin.upload_brand_image.no_file.app_error", nil, "")
+		c.Err.StatusCode = http.StatusBadRequest
+		return
+	}
+
+	if len(imageArray) <= 0 {
+		c.Err = model.NewLocAppError("uploadBrandImage", "api.admin.upload_brand_image.array.app_error", nil, "")
+		c.Err.StatusCode = http.StatusBadRequest
+		return
+	}
+
+	brandInterface := einterfaces.GetBrandInterface()
+	if brandInterface == nil {
+		c.Err = model.NewLocAppError("uploadBrandImage", "api.admin.upload_brand_image.not_available.app_error", nil, "")
+		c.Err.StatusCode = http.StatusNotImplemented
+		return
+	}
+
+	if err := brandInterface.SaveBrandImage(imageArray[0]); err != nil {
+		c.Err = err
+		return
+	}
+
+	c.LogAudit("")
+
+	rdata := map[string]string{}
+	rdata["status"] = "OK"
+	w.Write([]byte(model.MapToJson(rdata)))
+}
+
+func getBrandImage(c *Context, w http.ResponseWriter, r *http.Request) {
+	if len(utils.Cfg.FileSettings.DriverName) == 0 {
+		c.Err = model.NewLocAppError("getBrandImage", "api.admin.get_brand_image.storage.app_error", nil, "")
+		c.Err.StatusCode = http.StatusNotImplemented
+		return
+	}
+
+	brandInterface := einterfaces.GetBrandInterface()
+	if brandInterface == nil {
+		c.Err = model.NewLocAppError("getBrandImage", "api.admin.get_brand_image.not_available.app_error", nil, "")
+		c.Err.StatusCode = http.StatusNotImplemented
+		return
+	}
+
+	if img, err := brandInterface.GetBrandImage(); err != nil {
+		w.Write(nil)
+	} else {
+		w.Header().Set("Content-Type", "image/png")
+		w.Write(img)
+	}
+}
+
+func adminResetMfa(c *Context, w http.ResponseWriter, r *http.Request) {
+	props := model.MapFromJson(r.Body)
+
+	userId := props["user_id"]
+	if len(userId) != 26 {
+		c.SetInvalidParam("adminResetMfa", "user_id")
+		return
+	}
+
+	if err := DeactivateMfa(userId); err != nil {
+		c.Err = err
+		return
+	}
+
+	c.LogAudit("")
+
+	rdata := map[string]string{}
+	rdata["status"] = "ok"
+	w.Write([]byte(model.MapToJson(rdata)))
+}
+
+func adminResetPassword(c *Context, w http.ResponseWriter, r *http.Request) {
+	props := model.MapFromJson(r.Body)
+
+	userId := props["user_id"]
+	if len(userId) != 26 {
+		c.SetInvalidParam("adminResetPassword", "user_id")
+		return
+	}
+
+	newPassword := props["new_password"]
+	if len(newPassword) < model.MIN_PASSWORD_LENGTH {
+		c.SetInvalidParam("adminResetPassword", "new_password")
+		return
+	}
+
+	if err := ResetPassword(c, userId, newPassword); err != nil {
+		c.Err = err
+		return
+	}
+
+	c.LogAudit("")
+
+	rdata := map[string]string{}
+	rdata["status"] = "ok"
+	w.Write([]byte(model.MapToJson(rdata)))
 }

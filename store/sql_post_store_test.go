@@ -744,12 +744,17 @@ func TestPostStoreSearch(t *testing.T) {
 	}
 
 	r9 := (<-store.Post().Search(teamId, userId, &model.SearchParams{Terms: "mattermost jersey", IsHashtag: false})).Data.(*model.PostList)
-	if len(r9.Order) != 2 {
+	if len(r9.Order) != 0 {
+		t.Fatal("returned wrong search result")
+	}
+
+	r9a := (<-store.Post().Search(teamId, userId, &model.SearchParams{Terms: "corey new york", IsHashtag: false})).Data.(*model.PostList)
+	if len(r9a.Order) != 1 {
 		t.Fatal("returned wrong search result")
 	}
 
 	r10 := (<-store.Post().Search(teamId, userId, &model.SearchParams{Terms: "matter* jer*", IsHashtag: false})).Data.(*model.PostList)
-	if len(r10.Order) != 2 {
+	if len(r10.Order) != 0 {
 		t.Fatal("returned wrong search result")
 	}
 
@@ -760,6 +765,11 @@ func TestPostStoreSearch(t *testing.T) {
 
 	r12 := (<-store.Post().Search(teamId, userId, &model.SearchParams{Terms: "blargh>", IsHashtag: false})).Data.(*model.PostList)
 	if len(r12.Order) != 1 {
+		t.Fatal("returned wrong search result")
+	}
+
+	r13 := (<-store.Post().Search(teamId, userId, &model.SearchParams{Terms: "Jersey corey", IsHashtag: false, OrTerms: true})).Data.(*model.PostList)
+	if len(r13.Order) != 2 {
 		t.Fatal("returned wrong search result")
 	}
 }

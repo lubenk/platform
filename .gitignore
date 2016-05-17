@@ -2,7 +2,8 @@
 logs
 .DS_Store
 node_modules
-dist
+/dist
+/webapp/dist
 npm-debug.log
 
 web/static/js/bundle*.js
@@ -11,10 +12,12 @@ web/static/js/libs*.js
 
 config/active.dat
 
+# Enteprise imports file
+imports.go
+
 # Build Targets
-.prepare
-.prepare-go
-.prepare-jsx
+.prebuild
+.npminstall
 
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
 *.o
@@ -44,6 +47,8 @@ _testmain.go
 *mattermost.log
 *npm-debug.log*
 
+.tmp
+
 # Vim temporary files
 [._]*.s[a-w][a-z]
 [._]s[a-w][a-z]
@@ -67,5 +72,3 @@ api/data/*
 .agignore
 .ctags
 tags
-
-model/version.go.bak

@@ -32,12 +32,22 @@ type Customer struct {
 }
 
 type Features struct {
-	Users     *int  `json:"users"`
-	LDAP      *bool `json:"ldap"`
-	GoogleSSO *bool `json:"google_sso"`
+	Users          *int  `json:"users"`
+	LDAP           *bool `json:"ldap"`
+	MFA            *bool `json:"mfa"`
+	GoogleSSO      *bool `json:"google_sso"`
+	Compliance     *bool `json:"compliance"`
+	CustomBrand    *bool `json:"custom_brand"`
+	MHPNS          *bool `json:"mhpns"`
+	FutureFeatures *bool `json:"future_features"`
 }
 
 func (f *Features) SetDefaults() {
+	if f.FutureFeatures == nil {
+		f.FutureFeatures = new(bool)
+		*f.FutureFeatures = true
+	}
+
 	if f.Users == nil {
 		f.Users = new(int)
 		*f.Users = 0
@@ -45,12 +55,32 @@ func (f *Features) SetDefaults() {
 
 	if f.LDAP == nil {
 		f.LDAP = new(bool)
-		*f.LDAP = true
+		*f.LDAP = *f.FutureFeatures
+	}
+
+	if f.MFA == nil {
+		f.MFA = new(bool)
+		*f.MFA = *f.FutureFeatures
 	}
 
 	if f.GoogleSSO == nil {
 		f.GoogleSSO = new(bool)
-		*f.GoogleSSO = true
+		*f.GoogleSSO = *f.FutureFeatures
+	}
+
+	if f.Compliance == nil {
+		f.Compliance = new(bool)
+		*f.Compliance = *f.FutureFeatures
+	}
+
+	if f.CustomBrand == nil {
+		f.CustomBrand = new(bool)
+		*f.CustomBrand = *f.FutureFeatures
+	}
+
+	if f.MHPNS == nil {
+		f.MHPNS = new(bool)
+		*f.MHPNS = *f.FutureFeatures
 	}
 }
 

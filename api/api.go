@@ -4,68 +4,90 @@
 package api
 
 import (
-	"bytes"
-	l4g "github.com/alecthomas/log4go"
+	"net/http"
+
+	"github.com/gorilla/mux"
 	"github.com/mattermost/platform/model"
 	"github.com/mattermost/platform/utils"
-	"html/template"
-	"net/http"
 
 	_ "github.com/cloudfoundry/jibber_jabber"
 	_ "github.com/nicksnyder/go-i18n/i18n"
 )
 
-var ServerTemplates *template.Template
+type Routes struct {
+	Root    *mux.Router // ''
+	ApiRoot *mux.Router // 'api/v3'
 
-type ServerTemplatePage Page
+	Users    *mux.Router // 'api/v3/users'
+	NeedUser *mux.Router // 'api/v3/users/{user_id:[A-Za-z0-9]+}'
 
-func NewServerTemplatePage(templateName, locale string) *ServerTemplatePage {
-	return &ServerTemplatePage{
-		TemplateName: templateName,
-		Props:        make(map[string]string),
-		Extra:        make(map[string]string),
-		Html:         make(map[string]template.HTML),
-		ClientCfg:    utils.ClientCfg,
-		Locale:       locale,
-	}
+	Teams    *mux.Router // 'api/v3/teams'
+	NeedTeam *mux.Router // 'api/v3/teams/{team_id:[A-Za-z0-9]+}'
+
+	Channels        *mux.Router // 'api/v3/teams/{team_id:[A-Za-z0-9]+}/channels'
+	NeedChannel     *mux.Router // 'api/v3/teams/{team_id:[A-Za-z0-9]+}/channels/{channel_id:[A-Za-z0-9]+}'
+	NeedChannelName *mux.Router // 'api/v3/teams/{team_id:[A-Za-z0-9]+}/channels/name/{channel_name:[A-Za-z0-9-]+}'
+
+	Posts    *mux.Router // 'api/v3/teams/{team_id:[A-Za-z0-9]+}/channels/{channel_id:[A-Za-z0-9]+}/posts'
+	NeedPost *mux.Router // 'api/v3/teams/{team_id:[A-Za-z0-9]+}/channels/{channel_id:[A-Za-z0-9]+}/posts/{post_id:[A-Za-z0-9]+}'
+
+	Commands *mux.Router // 'api/v3/teams/{team_id:[A-Za-z0-9]+}/commands'
+	Hooks    *mux.Router // 'api/v3/teams/{team_id:[A-Za-z0-9]+}/hooks'
+
+	Files *mux.Router // 'api/v3/teams/{team_id:[A-Za-z0-9]+}/files'
+
+	OAuth *mux.Router // 'api/v3/oauth'
+
+	Admin *mux.Router // 'api/v3/admin'
+
+	Preferences *mux.Router // 'api/v3/preferences'
+
+	License *mux.Router // 'api/v3/license'
+
+	Public *mux.Router // 'api/v3/public'
 }
 
-func (me *ServerTemplatePage) Render() string {
-	var text bytes.Buffer
-
-	T := utils.GetUserTranslations(me.Locale)
-	me.Props["Footer"] = T("api.templates.email_footer")
-	me.Html["EmailInfo"] = template.HTML(T("api.templates.email_info",
-		map[string]interface{}{"SupportEmail": me.ClientCfg["SupportEmail"], "SiteName": me.ClientCfg["SiteName"]}))
-
-	if err := ServerTemplates.ExecuteTemplate(&text, me.TemplateName, me); err != nil {
-		l4g.Error(utils.T("api.api.render.error"), me.TemplateName, err)
-	}
-
-	return text.String()
-}
+var BaseRoutes *Routes
 
 func InitApi() {
-	r := Srv.Router.PathPrefix("/api/v1").Subrouter()
-	InitUser(r)
-	InitTeam(r)
-	InitChannel(r)
-	InitPost(r)
-	InitWebSocket(r)
-	InitFile(r)
-	InitCommand(r)
-	InitAdmin(r)
-	InitOAuth(r)
-	InitWebhook(r)
-	InitPreference(r)
-	InitLicense(r)
+	BaseRoutes = &Routes{}
+	BaseRoutes.Root = Srv.Router
+	BaseRoutes.ApiRoot = Srv.Router.PathPrefix(model.API_URL_SUFFIX).Subrouter()
+	BaseRoutes.Users = BaseRoutes.ApiRoot.PathPrefix("/users").Subrouter()
+	BaseRoutes.NeedUser = BaseRoutes.Users.PathPrefix("/{user_id:[A-Za-z0-9]+}").Subrouter()
+	BaseRoutes.Teams = BaseRoutes.ApiRoot.PathPrefix("/teams").Subrouter()
+	BaseRoutes.NeedTeam = BaseRoutes.Teams.PathPrefix("/{team_id:[A-Za-z0-9]+}").Subrouter()
+	BaseRoutes.Channels = BaseRoutes.NeedTeam.PathPrefix("/channels").Subrouter()
+	BaseRoutes.NeedChannel = BaseRoutes.Channels.PathPrefix("/{channel_id:[A-Za-z0-9]+}").Subrouter()
+	BaseRoutes.NeedChannelName = BaseRoutes.Channels.PathPrefix("/name/{channel_name:[A-Za-z0-9-]+}").Subrouter()
+	BaseRoutes.Posts = BaseRoutes.NeedChannel.PathPrefix("/posts").Subrouter()
+	BaseRoutes.NeedPost = BaseRoutes.Posts.PathPrefix("/{post_id:[A-Za-z0-9]+}").Subrouter()
+	BaseRoutes.Commands = BaseRoutes.NeedTeam.PathPrefix("/commands").Subrouter()
+	BaseRoutes.Files = BaseRoutes.NeedTeam.PathPrefix("/files").Subrouter()
+	BaseRoutes.Hooks = BaseRoutes.NeedTeam.PathPrefix("/hooks").Subrouter()
+	BaseRoutes.OAuth = BaseRoutes.ApiRoot.PathPrefix("/oauth").Subrouter()
+	BaseRoutes.Admin = BaseRoutes.ApiRoot.PathPrefix("/admin").Subrouter()
+	BaseRoutes.Preferences = BaseRoutes.ApiRoot.PathPrefix("/preferences").Subrouter()
+	BaseRoutes.License = BaseRoutes.ApiRoot.PathPrefix("/license").Subrouter()
+	BaseRoutes.Public = BaseRoutes.ApiRoot.PathPrefix("/public").Subrouter()
 
-	templatesDir := utils.FindDir("api/templates")
-	l4g.Debug(utils.T("api.api.init.parsing_templates.debug"), templatesDir)
-	var err error
-	if ServerTemplates, err = template.ParseGlob(templatesDir + "*.html"); err != nil {
-		l4g.Error(utils.T("api.api.init.parsing_templates.error"), err)
-	}
+	InitUser()
+	InitTeam()
+	InitChannel()
+	InitPost()
+	InitWebSocket()
+	InitFile()
+	InitCommand()
+	InitAdmin()
+	InitOAuth()
+	InitWebhook()
+	InitPreference()
+	InitLicense()
+
+	// 404 on any api route before web.go has a chance to serve it
+	Srv.Router.Handle("/api/{anything:.*}", http.HandlerFunc(Handle404))
+
+	utils.InitHTML()
 }
 
 func HandleEtag(etag string, w http.ResponseWriter, r *http.Request) bool {

@@ -33,6 +33,7 @@ type Store interface {
 	Post() PostStore
 	User() UserStore
 	Audit() AuditStore
+	Compliance() ComplianceStore
 	Session() SessionStore
 	OAuth() OAuthStore
 	System() SystemStore
@@ -40,8 +41,10 @@ type Store interface {
 	Command() CommandStore
 	Preference() PreferenceStore
 	License() LicenseStore
+	PasswordRecovery() PasswordRecoveryStore
 	MarkSystemRanUnitTests()
 	Close()
+	DropAllTables()
 }
 
 type TeamStore interface {
@@ -50,12 +53,19 @@ type TeamStore interface {
 	UpdateDisplayName(name string, teamId string) StoreChannel
 	Get(id string) StoreChannel
 	GetByName(name string) StoreChannel
-	GetTeamsForEmail(domain string) StoreChannel
 	GetAll() StoreChannel
 	GetAllTeamListing() StoreChannel
+	GetTeamsByUserId(userId string) StoreChannel
 	GetByInviteId(inviteId string) StoreChannel
 	PermanentDelete(teamId string) StoreChannel
 	AnalyticsTeamCount() StoreChannel
+	SaveMember(member *model.TeamMember) StoreChannel
+	UpdateMember(member *model.TeamMember) StoreChannel
+	GetMembers(teamId string) StoreChannel
+	GetTeamsForUser(userId string) StoreChannel
+	RemoveMember(teamId string, userId string) StoreChannel
+	RemoveAllMembersByTeam(teamId string) StoreChannel
+	RemoveAllMembersByUser(userId string) StoreChannel
 }
 
 type ChannelStore interface {
@@ -81,6 +91,7 @@ type ChannelStore interface {
 	PermanentDeleteMembersByUser(userId string) StoreChannel
 	GetExtraMembers(channelId string, limit int) StoreChannel
 	CheckPermissionsTo(teamId string, channelId string, userId string) StoreChannel
+	CheckPermissionsToNoTeam(channelId string, userId string) StoreChannel
 	CheckOpenChannelPermissions(teamId string, channelId string) StoreChannel
 	CheckPermissionsToByName(teamId string, channelName string, userId string) StoreChannel
 	UpdateLastViewedAt(channelId string, userId string) StoreChannel
@@ -111,18 +122,28 @@ type UserStore interface {
 	Save(user *model.User) StoreChannel
 	Update(user *model.User, allowRoleUpdate bool) StoreChannel
 	UpdateLastPictureUpdate(userId string) StoreChannel
+	UpdateUpdateAt(userId string) StoreChannel
 	UpdateLastPingAt(userId string, time int64) StoreChannel
 	UpdateLastActivityAt(userId string, time int64) StoreChannel
 	UpdateUserAndSessionActivity(userId string, sessionId string, time int64) StoreChannel
 	UpdatePassword(userId, newPassword string) StoreChannel
-	UpdateAuthData(userId, service, authData, email string) StoreChannel
+	UpdateAuthData(userId string, service string, authData *string, email string) StoreChannel
+	UpdateMfaSecret(userId, secret string) StoreChannel
+	UpdateMfaActive(userId string, active bool) StoreChannel
 	Get(id string) StoreChannel
+	GetAll() StoreChannel
+	GetAllProfiles() StoreChannel
 	GetProfiles(teamId string) StoreChannel
-	GetByEmail(teamId string, email string) StoreChannel
-	GetByAuth(teamId string, authData string, authService string) StoreChannel
-	GetByUsername(teamId string, username string) StoreChannel
+	GetDirectProfiles(userId string) StoreChannel
+	GetProfileByIds(userId []string) StoreChannel
+	GetByEmail(email string) StoreChannel
+	GetByAuth(authData *string, authService string) StoreChannel
+	GetByUsername(username string) StoreChannel
+	GetForLogin(loginId string, allowSignInWithUsername, allowSignInWithEmail, ldapEnabled bool) StoreChannel
 	VerifyEmail(userId string) StoreChannel
+	GetEtagForAllProfiles() StoreChannel
 	GetEtagForProfiles(teamId string) StoreChannel
+	GetEtagForDirectProfiles(userId string) StoreChannel
 	UpdateFailedPasswordAttempts(userId string, attempts int) StoreChannel
 	GetForExport(teamId string) StoreChannel
 	GetTotalUsersCount() StoreChannel
@@ -130,6 +151,7 @@ type UserStore interface {
 	GetSystemAdminProfiles() StoreChannel
 	PermanentDelete(userId string) StoreChannel
 	AnalyticsUniqueUserCount(teamId string) StoreChannel
+	GetUnreadCount(userId string) StoreChannel
 }
 
 type SessionStore interface {
@@ -137,18 +159,26 @@ type SessionStore interface {
 	Get(sessionIdOrToken string) StoreChannel
 	GetSessions(userId string) StoreChannel
 	Remove(sessionIdOrToken string) StoreChannel
-	RemoveAllSessionsForTeam(teamId string) StoreChannel
+	RemoveAllSessions() StoreChannel
 	PermanentDeleteSessionsByUser(teamId string) StoreChannel
 	UpdateLastActivityAt(sessionId string, time int64) StoreChannel
 	UpdateRoles(userId string, roles string) StoreChannel
 	UpdateDeviceId(id string, deviceId string) StoreChannel
-	AnalyticsSessionCount(teamId string) StoreChannel
+	AnalyticsSessionCount() StoreChannel
 }
 
 type AuditStore interface {
 	Save(audit *model.Audit) StoreChannel
 	Get(user_id string, limit int) StoreChannel
 	PermanentDeleteByUser(userId string) StoreChannel
+}
+
+type ComplianceStore interface {
+	Save(compliance *model.Compliance) StoreChannel
+	Update(compliance *model.Compliance) StoreChannel
+	Get(id string) StoreChannel
+	GetAll() StoreChannel
+	ComplianceExport(compliance *model.Compliance) StoreChannel
 }
 
 type OAuthStore interface {
@@ -171,6 +201,7 @@ type SystemStore interface {
 	SaveOrUpdate(system *model.System) StoreChannel
 	Update(system *model.System) StoreChannel
 	Get() StoreChannel
+	GetByName(name string) StoreChannel
 }
 
 type WebhookStore interface {
@@ -213,4 +244,11 @@ type PreferenceStore interface {
 type LicenseStore interface {
 	Save(license *model.LicenseRecord) StoreChannel
 	Get(id string) StoreChannel
+}
+
+type PasswordRecoveryStore interface {
+	SaveOrUpdate(recovery *model.PasswordRecovery) StoreChannel
+	Delete(userId string) StoreChannel
+	Get(userId string) StoreChannel
+	GetByCode(code string) StoreChannel
 }

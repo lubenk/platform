@@ -57,15 +57,16 @@ const (
 
 var fileInfoCache *utils.Cache = utils.NewLru(1000)
 
-func InitFile(r *mux.Router) {
+func InitFile() {
 	l4g.Debug(utils.T("api.file.init.debug"))
 
-	sr := r.PathPrefix("/files").Subrouter()
-	sr.Handle("/upload", ApiUserRequired(uploadFile)).Methods("POST")
-	sr.Handle("/get/{channel_id:[A-Za-z0-9]+}/{user_id:[A-Za-z0-9]+}/{filename:([A-Za-z0-9]+/)?.+(\\.[A-Za-z0-9]{3,})?}", ApiAppHandler(getFile)).Methods("GET")
-	sr.Handle("/get_info/{channel_id:[A-Za-z0-9]+}/{user_id:[A-Za-z0-9]+}/{filename:([A-Za-z0-9]+/)?.+(\\.[A-Za-z0-9]{3,})?}", ApiAppHandler(getFileInfo)).Methods("GET")
-	sr.Handle("/get_public_link", ApiUserRequired(getPublicLink)).Methods("POST")
-	sr.Handle("/get_export", ApiUserRequired(getExport)).Methods("GET")
+	BaseRoutes.Files.Handle("/upload", ApiUserRequired(uploadFile)).Methods("POST")
+	BaseRoutes.Files.Handle("/get/{channel_id:[A-Za-z0-9]+}/{user_id:[A-Za-z0-9]+}/{filename:([A-Za-z0-9]+/)?.+(\\.[A-Za-z0-9]{3,})?}", ApiUserRequiredTrustRequester(getFile)).Methods("GET")
+	BaseRoutes.Files.Handle("/get_info/{channel_id:[A-Za-z0-9]+}/{user_id:[A-Za-z0-9]+}/{filename:([A-Za-z0-9]+/)?.+(\\.[A-Za-z0-9]{3,})?}", ApiUserRequired(getFileInfo)).Methods("GET")
+	BaseRoutes.Files.Handle("/get_public_link", ApiUserRequired(getPublicLink)).Methods("POST")
+	BaseRoutes.Files.Handle("/get_export", ApiUserRequired(getExport)).Methods("GET")
+
+	BaseRoutes.Public.Handle("/files/get/{team_id:[A-Za-z0-9]+}/{channel_id:[A-Za-z0-9]+}/{user_id:[A-Za-z0-9]+}/{filename:([A-Za-z0-9]+/)?.+(\\.[A-Za-z0-9]{3,})?}", ApiAppHandlerTrustRequesterIndependent(getPublicFile)).Methods("GET")
 }
 
 func uploadFile(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -101,7 +102,7 @@ func uploadFile(c *Context, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cchan := Srv.Store.Channel().CheckPermissionsTo(c.Session.TeamId, channelId, c.Session.UserId)
+	cchan := Srv.Store.Channel().CheckPermissionsTo(c.TeamId, channelId, c.Session.UserId)
 
 	files := m.File["files"]
 
@@ -147,9 +148,9 @@ func uploadFile(c *Context, w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		path := "teams/" + c.Session.TeamId + "/channels/" + channelId + "/users/" + c.Session.UserId + "/" + uid + "/" + filename
+		path := "teams/" + c.TeamId + "/channels/" + channelId + "/users/" + c.Session.UserId + "/" + uid + "/" + filename
 
-		if err := writeFile(buf.Bytes(), path); err != nil {
+		if err := WriteFile(buf.Bytes(), path); err != nil {
 			c.Err = err
 			return
 		}
@@ -164,7 +165,7 @@ func uploadFile(c *Context, w http.ResponseWriter, r *http.Request) {
 		resStruct.ClientIds = append(resStruct.ClientIds, clientId)
 	}
 
-	handleImagesAndForget(imageNameList, imageDataList, c.Session.TeamId, channelId, c.Session.UserId)
+	handleImagesAndForget(imageNameList, imageDataList, c.TeamId, channelId, c.Session.UserId)
 
 	w.Write([]byte(resStruct.ToJson()))
 }
@@ -237,7 +238,7 @@ func handleImagesAndForget(filenames []string, fileData [][]byte, teamId, channe
 						return
 					}
 
-					if err := writeFile(buf.Bytes(), dest+name+"_thumb.jpg"); err != nil {
+					if err := WriteFile(buf.Bytes(), dest+name+"_thumb.jpg"); err != nil {
 						l4g.Error(utils.T("api.file.handle_images_forget.upload_thumb.error"), channelId, userId, filename, err)
 						return
 					}
@@ -260,7 +261,7 @@ func handleImagesAndForget(filenames []string, fileData [][]byte, teamId, channe
 						return
 					}
 
-					if err := writeFile(buf.Bytes(), dest+name+"_preview.jpg"); err != nil {
+					if err := WriteFile(buf.Bytes(), dest+name+"_preview.jpg"); err != nil {
 						l4g.Error(utils.T("api.file.handle_images_forget.upload_preview.error"), channelId, userId, filename, err)
 						return
 					}
@@ -319,9 +320,9 @@ func getFileInfo(c *Context, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cchan := Srv.Store.Channel().CheckPermissionsTo(c.Session.TeamId, channelId, c.Session.UserId)
+	cchan := Srv.Store.Channel().CheckPermissionsTo(c.TeamId, channelId, c.Session.UserId)
 
-	path := "teams/" + c.Session.TeamId + "/channels/" + channelId + "/users/" + userId + "/" + filename
+	path := "teams/" + c.TeamId + "/channels/" + channelId + "/users/" + userId + "/" + filename
 	var info *model.FileInfo
 
 	if cached, ok := fileInfoCache.Get(path); ok {
@@ -350,91 +351,130 @@ func getFileInfo(c *Context, w http.ResponseWriter, r *http.Request) {
 }
 
 func getFile(c *Context, w http.ResponseWriter, r *http.Request) {
-	if len(utils.Cfg.FileSettings.DriverName) == 0 {
-		c.Err = model.NewLocAppError("uploadFile", "api.file.upload_file.storage.app_error", nil, "")
+	params := mux.Vars(r)
+
+	teamId := c.TeamId
+	channelId := params["channel_id"]
+	userId := params["user_id"]
+	filename := params["filename"]
+
+	if !c.HasPermissionsToChannel(Srv.Store.Channel().CheckPermissionsTo(teamId, channelId, userId), "getFile") {
+		return
+	}
+
+	if err, bytes := getFileData(teamId, channelId, userId, filename); err != nil {
+		c.Err = err
+		return
+	} else if err := writeFileResponse(filename, bytes, w, r); err != nil {
+		c.Err = err
+		return
+	}
+}
+
+func getPublicFile(c *Context, w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+
+	teamId := params["team_id"]
+	channelId := params["channel_id"]
+	userId := params["user_id"]
+	filename := params["filename"]
+
+	hash := r.URL.Query().Get("h")
+	data := r.URL.Query().Get("d")
+
+	if !utils.Cfg.FileSettings.EnablePublicLink {
+		c.Err = model.NewLocAppError("getPublicFile", "api.file.get_file.public_disabled.app_error", nil, "")
 		c.Err.StatusCode = http.StatusNotImplemented
 		return
 	}
 
-	params := mux.Vars(r)
-
-	channelId := params["channel_id"]
-	if len(channelId) != 26 {
-		c.SetInvalidParam("getFile", "channel_id")
-		return
-	}
-
-	userId := params["user_id"]
-	if len(userId) != 26 {
-		c.SetInvalidParam("getFile", "user_id")
-		return
-	}
-
-	filename := params["filename"]
-	if len(filename) == 0 {
-		c.SetInvalidParam("getFile", "filename")
-		return
-	}
-
-	hash := r.URL.Query().Get("h")
-	data := r.URL.Query().Get("d")
-	teamId := r.URL.Query().Get("t")
-	isDownload := r.URL.Query().Get("download") == "1"
-
-	cchan := Srv.Store.Channel().CheckPermissionsTo(c.Session.TeamId, channelId, c.Session.UserId)
-
-	path := ""
-	if len(teamId) == 26 {
-		path = "teams/" + teamId + "/channels/" + channelId + "/users/" + userId + "/" + filename
-	} else {
-		path = "teams/" + c.Session.TeamId + "/channels/" + channelId + "/users/" + userId + "/" + filename
-	}
-
-	fileData := make(chan []byte)
-	getFileAndForget(path, fileData)
-
-	if len(hash) > 0 && len(data) > 0 && len(teamId) == 26 {
+	if len(hash) > 0 && len(data) > 0 {
 		if !model.ComparePassword(hash, fmt.Sprintf("%v:%v", data, utils.Cfg.FileSettings.PublicLinkSalt)) {
-			c.Err = model.NewLocAppError("getFile", "api.file.get_file.public_invalid.app_error", nil, "")
+			c.Err = model.NewLocAppError("getPublicFile", "api.file.get_file.public_invalid.app_error", nil, "")
+			c.Err.StatusCode = http.StatusBadRequest
 			return
 		}
-	} else if !c.HasPermissionsToChannel(cchan, "getFile") {
+	} else {
+		c.Err = model.NewLocAppError("getPublicFile", "api.file.get_file.public_invalid.app_error", nil, "")
+		c.Err.StatusCode = http.StatusBadRequest
 		return
 	}
 
-	f := <-fileData
-
-	if f == nil {
-		c.Err = model.NewLocAppError("getFile", "api.file.get_file.not_found.app_error", nil, "path="+path)
-		c.Err.StatusCode = http.StatusNotFound
+	if err, bytes := getFileData(teamId, channelId, userId, filename); err != nil {
+		c.Err = err
+		return
+	} else if err := writeFileResponse(filename, bytes, w, r); err != nil {
+		c.Err = err
 		return
 	}
+}
 
+func getFileData(teamId string, channelId string, userId string, filename string) (*model.AppError, []byte) {
+	if len(utils.Cfg.FileSettings.DriverName) == 0 {
+		err := model.NewLocAppError("getFileData", "api.file.upload_file.storage.app_error", nil, "")
+		err.StatusCode = http.StatusNotImplemented
+		return err, nil
+	}
+
+	if len(teamId) != 26 {
+		return NewInvalidParamError("getFileData", "team_id"), nil
+	}
+
+	if len(channelId) != 26 {
+		return NewInvalidParamError("getFileData", "channel_id"), nil
+	}
+
+	if len(userId) != 26 {
+		return NewInvalidParamError("getFileData", "user_id"), nil
+	}
+
+	if len(filename) == 0 {
+		return NewInvalidParamError("getFileData", "filename"), nil
+	}
+
+	path := "teams/" + teamId + "/channels/" + channelId + "/users/" + userId + "/" + filename
+
+	fileChan := make(chan []byte)
+	getFileAndForget(path, fileChan)
+
+	if bytes := <-fileChan; bytes == nil {
+		err := model.NewLocAppError("writeFileResponse", "api.file.get_file.not_found.app_error", nil, "path="+path)
+		err.StatusCode = http.StatusNotFound
+		return err, nil
+	} else {
+		return nil, bytes
+	}
+}
+
+func writeFileResponse(filename string, bytes []byte, w http.ResponseWriter, r *http.Request) *model.AppError {
 	w.Header().Set("Cache-Control", "max-age=2592000, public")
-	w.Header().Set("Content-Length", strconv.Itoa(len(f)))
+	w.Header().Set("Content-Length", strconv.Itoa(len(bytes)))
 	w.Header().Del("Content-Type") // Content-Type will be set automatically by the http writer
 
-	if isDownload {
-		// attach extra headers to trigger a download on IE, Edge, and Safari
-		ua := user_agent.New(r.UserAgent())
-		bname, _ := ua.Browser()
+	// attach extra headers to trigger a download on IE, Edge, and Safari
+	ua := user_agent.New(r.UserAgent())
+	bname, _ := ua.Browser()
 
-		parts := strings.Split(filename, "/")
-		filePart := strings.Split(parts[len(parts)-1], "?")[0]
-		w.Header().Set("Content-Disposition", "attachment;filename=\""+filePart+"\"")
+	parts := strings.Split(filename, "/")
+	filePart := strings.Split(parts[len(parts)-1], "?")[0]
+	w.Header().Set("Content-Disposition", "attachment;filename=\""+filePart+"\"")
 
-		if bname == "Edge" || bname == "Internet Explorer" || bname == "Safari" {
-			// trim off anything before the final / so we just get the file's name
-			w.Header().Set("Content-Type", "application/octet-stream")
-		}
+	if bname == "Edge" || bname == "Internet Explorer" || bname == "Safari" {
+		w.Header().Set("Content-Type", "application/octet-stream")
 	}
 
-	w.Write(f)
+	// prevent file links from being embedded in iframes
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set("Content-Security-Policy", "Frame-ancestors 'none'")
+
+	w.Write(bytes)
+
+	return nil
 }
 
 func getFileAndForget(path string, fileData chan []byte) {
 	go func() {
-		data, getErr := readFile(path)
+		data, getErr := ReadFile(path)
 		if getErr != nil {
 			l4g.Error(getErr)
 			fileData <- nil
@@ -453,7 +493,8 @@ func getPublicLink(c *Context, w http.ResponseWriter, r *http.Request) {
 
 	if !utils.Cfg.FileSettings.EnablePublicLink {
 		c.Err = model.NewLocAppError("getPublicLink", "api.file.get_public_link.disabled.app_error", nil, "")
-		c.Err.StatusCode = http.StatusForbidden
+		c.Err.StatusCode = http.StatusNotImplemented
+		return
 	}
 
 	props := model.MapFromJson(r.Body)
@@ -474,7 +515,7 @@ func getPublicLink(c *Context, w http.ResponseWriter, r *http.Request) {
 	userId := matches[0][2]
 	filename = matches[0][3]
 
-	cchan := Srv.Store.Channel().CheckPermissionsTo(c.Session.TeamId, channelId, c.Session.UserId)
+	cchan := Srv.Store.Channel().CheckPermissionsTo(c.TeamId, channelId, c.Session.UserId)
 
 	newProps := make(map[string]string)
 	newProps["filename"] = filename
@@ -482,25 +523,22 @@ func getPublicLink(c *Context, w http.ResponseWriter, r *http.Request) {
 	data := model.MapToJson(newProps)
 	hash := model.HashPassword(fmt.Sprintf("%v:%v", data, utils.Cfg.FileSettings.PublicLinkSalt))
 
-	url := fmt.Sprintf("%s/api/v1/files/get/%s/%s/%s?d=%s&h=%s&t=%s", c.GetSiteURL(), channelId, userId, filename, url.QueryEscape(data), url.QueryEscape(hash), c.Session.TeamId)
+	url := fmt.Sprintf("%s/public/files/get/%s/%s/%s/%s?d=%s&h=%s", c.GetSiteURL()+model.API_URL_SUFFIX, c.TeamId, channelId, userId, filename, url.QueryEscape(data), url.QueryEscape(hash))
 
 	if !c.HasPermissionsToChannel(cchan, "getPublicLink") {
 		return
 	}
 
-	rData := make(map[string]string)
-	rData["public_link"] = url
-
-	w.Write([]byte(model.MapToJson(rData)))
+	w.Write([]byte(model.StringToJson(url)))
 }
 
 func getExport(c *Context, w http.ResponseWriter, r *http.Request) {
-	if !c.HasPermissionsToTeam(c.Session.TeamId, "export") || !c.IsTeamAdmin() {
+	if !c.HasPermissionsToTeam(c.TeamId, "export") || !c.IsTeamAdmin() {
 		c.Err = model.NewLocAppError("getExport", "api.file.get_export.team_admin.app_error", nil, "userId="+c.Session.UserId)
 		c.Err.StatusCode = http.StatusForbidden
 		return
 	}
-	data, err := readFile(EXPORT_PATH + EXPORT_FILENAME)
+	data, err := ReadFile(EXPORT_PATH + EXPORT_FILENAME)
 	if err != nil {
 		c.Err = model.NewLocAppError("getExport", "api.file.get_export.retrieve.app_error", nil, err.Error())
 		return
@@ -511,7 +549,7 @@ func getExport(c *Context, w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-func writeFile(f []byte, path string) *model.AppError {
+func WriteFile(f []byte, path string) *model.AppError {
 
 	if utils.Cfg.FileSettings.DriverName == model.IMAGE_DRIVER_S3 {
 		var auth aws.Auth
@@ -534,20 +572,20 @@ func writeFile(f []byte, path string) *model.AppError {
 		}
 
 		if err != nil {
-			return model.NewLocAppError("writeFile", "api.file.write_file.s3.app_error", nil, err.Error())
+			return model.NewLocAppError("WriteFile", "api.file.write_file.s3.app_error", nil, err.Error())
 		}
 	} else if utils.Cfg.FileSettings.DriverName == model.IMAGE_DRIVER_LOCAL {
-		if err := writeFileLocally(f, utils.Cfg.FileSettings.Directory+path); err != nil {
+		if err := WriteFileLocally(f, utils.Cfg.FileSettings.Directory+path); err != nil {
 			return err
 		}
 	} else {
-		return model.NewLocAppError("writeFile", "api.file.write_file.configured.app_error", nil, "")
+		return model.NewLocAppError("WriteFile", "api.file.write_file.configured.app_error", nil, "")
 	}
 
 	return nil
 }
 
-func moveFile(oldPath, newPath string) *model.AppError {
+func MoveFile(oldPath, newPath string) *model.AppError {
 	if utils.Cfg.FileSettings.DriverName == model.IMAGE_DRIVER_S3 {
 		fileData := make(chan []byte)
 		getFileAndForget(oldPath, fileData)
@@ -568,10 +606,15 @@ func moveFile(oldPath, newPath string) *model.AppError {
 			return model.NewLocAppError("moveFile", "api.file.move_file.delete_from_s3.app_error", nil, err.Error())
 		}
 
-		if err := writeFile(fileBytes, newPath); err != nil {
+		if err := WriteFile(fileBytes, newPath); err != nil {
 			return err
 		}
 	} else if utils.Cfg.FileSettings.DriverName == model.IMAGE_DRIVER_LOCAL {
+
+		if err := os.MkdirAll(filepath.Dir(utils.Cfg.FileSettings.Directory+newPath), 0774); err != nil {
+			return model.NewLocAppError("moveFile", "api.file.move_file.rename.app_error", nil, err.Error())
+		}
+
 		if err := os.Rename(utils.Cfg.FileSettings.Directory+oldPath, utils.Cfg.FileSettings.Directory+newPath); err != nil {
 			return model.NewLocAppError("moveFile", "api.file.move_file.rename.app_error", nil, err.Error())
 		}
@@ -582,19 +625,19 @@ func moveFile(oldPath, newPath string) *model.AppError {
 	return nil
 }
 
-func writeFileLocally(f []byte, path string) *model.AppError {
+func WriteFileLocally(f []byte, path string) *model.AppError {
 	if err := os.MkdirAll(filepath.Dir(path), 0774); err != nil {
-		return model.NewLocAppError("writeFile", "api.file.write_file_locally.create_dir.app_error", nil, err.Error())
+		return model.NewLocAppError("WriteFile", "api.file.write_file_locally.create_dir.app_error", nil, err.Error())
 	}
 
 	if err := ioutil.WriteFile(path, f, 0644); err != nil {
-		return model.NewLocAppError("writeFile", "api.file.write_file_locally.writing.app_error", nil, err.Error())
+		return model.NewLocAppError("WriteFile", "api.file.write_file_locally.writing.app_error", nil, err.Error())
 	}
 
 	return nil
 }
 
-func readFile(path string) ([]byte, *model.AppError) {
+func ReadFile(path string) ([]byte, *model.AppError) {
 
 	if utils.Cfg.FileSettings.DriverName == model.IMAGE_DRIVER_S3 {
 		var auth aws.Auth
@@ -614,18 +657,18 @@ func readFile(path string) ([]byte, *model.AppError) {
 			if f != nil {
 				return f, nil
 			} else if tries >= 3 {
-				return nil, model.NewLocAppError("readFile", "api.file.read_file.get.app_error", nil, "path="+path+", err="+err.Error())
+				return nil, model.NewLocAppError("ReadFile", "api.file.read_file.get.app_error", nil, "path="+path+", err="+err.Error())
 			}
 			time.Sleep(3000 * time.Millisecond)
 		}
 	} else if utils.Cfg.FileSettings.DriverName == model.IMAGE_DRIVER_LOCAL {
 		if f, err := ioutil.ReadFile(utils.Cfg.FileSettings.Directory + path); err != nil {
-			return nil, model.NewLocAppError("readFile", "api.file.read_file.reading_local.app_error", nil, err.Error())
+			return nil, model.NewLocAppError("ReadFile", "api.file.read_file.reading_local.app_error", nil, err.Error())
 		} else {
 			return f, nil
 		}
 	} else {
-		return nil, model.NewLocAppError("readFile", "api.file.read_file.configured.app_error", nil, "")
+		return nil, model.NewLocAppError("ReadFile", "api.file.read_file.configured.app_error", nil, "")
 	}
 }
 

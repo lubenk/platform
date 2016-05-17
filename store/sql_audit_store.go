@@ -18,8 +18,8 @@ func NewSqlAuditStore(sqlStore *SqlStore) AuditStore {
 		table := db.AddTableWithName(model.Audit{}, "Audits").SetKeys(false, "Id")
 		table.ColMap("Id").SetMaxSize(26)
 		table.ColMap("UserId").SetMaxSize(26)
-		table.ColMap("Action").SetMaxSize(64)
-		table.ColMap("ExtraInfo").SetMaxSize(128)
+		table.ColMap("Action").SetMaxSize(512)
+		table.ColMap("ExtraInfo").SetMaxSize(1024)
 		table.ColMap("IpAddress").SetMaxSize(64)
 		table.ColMap("SessionId").SetMaxSize(26)
 	}

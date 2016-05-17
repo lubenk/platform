@@ -1,8 +1,19 @@
 {
 	"ImportPath": "github.com/mattermost/platform",
 	"GoVersion": "go1.5.1",
-	"GodepVersion": "v60",
+	"Packages": [
+		"./..."
+	],
 	"Deps": [
+		{
+			"ImportPath": "github.com/NYTimes/gziphandler",
+			"Rev": "a88790d49798560db24af70fb6a10a66e2549a72"
+		},
+		{
+			"ImportPath": "github.com/gorilla/handlers",
+			"Comment": "v1.1-4-gd0f2612",
+			"Rev": "d0f261246491e3a8613039e90764460448dc05f5"
+		},
 		{
 			"ImportPath": "github.com/alecthomas/log4go",
 			"Rev": "8e9057c3b25c409a34c0b9737cdc82cbcafeabce"
@@ -17,9 +28,8 @@
 			"Rev": "bcc4c8345a21301bf47c032ff42dd1aae2fe3027"
 		},
 		{
-			"ImportPath": "github.com/dgrijalva/jwt-go",
-			"Comment": "v2.5.0",
-			"Rev": "b446e078d613dc395bf50b08884acbeafb19ce50"
+			"ImportPath": "github.com/dgryski/dgoogauth",
+			"Rev": "67642ac6f9144f6610279e37e7be9af13f1cd668"
 		},
 		{
 			"ImportPath": "github.com/disintegration/imaging",
@@ -96,6 +106,14 @@
 			"ImportPath": "github.com/lib/pq/oid",
 			"Comment": "go1.0-cutoff-63-g11fc39a",
 			"Rev": "11fc39a580a008f1f39bb3d11d984fb34ed778d9"
+		},
+		{
+			"ImportPath": "github.com/mattermost/rsc/gf256",
+			"Rev": "bbaefb05eaa0389ea712340066837c8ce4d287f9"
+		},
+		{
+			"ImportPath": "github.com/mattermost/rsc/qr",
+			"Rev": "bbaefb05eaa0389ea712340066837c8ce4d287f9"
 		},
 		{
 			"ImportPath": "github.com/mssola/user_agent",
