@@ -1,6 +1,18 @@
-# Mattermost
+# Mattermost ADFS Edition
 
-Mattermost Team Edition is an open source, self-hosted Slack-alternative. 
+This is a modified version of the May 17, 2016 stable release v3.0.2.
+The version adds an additional compenent to integrates with ADFS for SSO.
+
+I have called it v3.0.2 ADFS
+
+You can either download the compiled version from the release tab [https://github.com/lubenk/platform/tree/ADFS-3.0.2] (https://github.com/lubenk/platform/tree/ADFS-3.0.2) or compile it yourself. I used version 1.5.1 Golang to compile it.
+Please avoid 1.4.2 golang as there where some issues
+
+You can check [http://www.gi-architects.co.uk/2016/05/enable-adfs-oauth2-for-mattermost-3-0/] (http://www.gi-architects.co.uk/2016/05/enable-adfs-oauth2-for-mattermost-3-0/) for instructions on how to configure adfs and mattermost.
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+Mattermost Team Edition is an open source, self-hosted Slack-alternative.
 
 It's written in Golang and React and runs as a single Linux binary with either MySQL or Postgres. Every month on the 16th a new compiled version is released under an MIT license. 
 
