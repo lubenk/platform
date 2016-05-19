@@ -491,7 +491,7 @@ func signupWithOAuth(c *Context, w http.ResponseWriter, r *http.Request) {
 
 func GetAuthorizationCode(c *Context, service string, props map[string]string, loginHint string) (string, *model.AppError) {
 
-  var scope string
+	var scope string
 	var clientId string
 	var endpoint string
 	var resource string
@@ -579,7 +579,7 @@ func AuthorizeOAuthUser(service, code, state, redirectUri string) (io.ReadCloser
 		return nil, "", nil, model.NewLocAppError("AuthorizeOAuthUser", "api.user.authorize_oauth_user.invalid_state.app_error", nil, "")
 	}
 
-  teamId := stateProps["team_id"]
+	teamId := stateProps["team_id"]
 
 	p := url.Values{}
 	p.Set("client_id", clientId)
@@ -605,7 +605,7 @@ func AuthorizeOAuthUser(service, code, state, redirectUri string) (io.ReadCloser
 	if service == "adfs" {
 		ac, err1, err2 := AccessResponseFromJsonADFS(resp.Body, pubkey)
 		if len(err2) == 0 && ac != nil {
-				return ac, teamId, stateProps, nil
+			return ac, teamId, stateProps, nil
 		} else {
 			return nil, "", nil, model.NewLocAppError(err1, "api.user.api.adfs_oauth.adfs_error.app_error", nil, err2)
 		}
@@ -635,7 +635,7 @@ func AuthorizeOAuthUser(service, code, state, redirectUri string) (io.ReadCloser
 		if resp, err := client.Do(req); err != nil {
 			return nil, "", nil, model.NewLocAppError("AuthorizeOAuthUser", "api.user.authorize_oauth_user.service.app_error", map[string]interface{}{"Service": service}, err.Error())
 		} else {
-      return resp.Body, teamId, stateProps, nil
+			return resp.Body, teamId, stateProps, nil
 		}
 	}
 	return nil, "", nil, nil

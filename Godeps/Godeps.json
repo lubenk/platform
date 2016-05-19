@@ -1,18 +1,11 @@
 {
 	"ImportPath": "github.com/mattermost/platform",
 	"GoVersion": "go1.5.1",
-	"Packages": [
-		"./..."
-	],
+	"GodepVersion": "v60",
 	"Deps": [
 		{
 			"ImportPath": "github.com/NYTimes/gziphandler",
 			"Rev": "a88790d49798560db24af70fb6a10a66e2549a72"
-		},
-		{
-			"ImportPath": "github.com/gorilla/handlers",
-			"Comment": "v1.1-4-gd0f2612",
-			"Rev": "d0f261246491e3a8613039e90764460448dc05f5"
 		},
 		{
 			"ImportPath": "github.com/alecthomas/log4go",
@@ -26,6 +19,11 @@
 		{
 			"ImportPath": "github.com/cloudfoundry/jibber_jabber",
 			"Rev": "bcc4c8345a21301bf47c032ff42dd1aae2fe3027"
+		},
+		{
+			"ImportPath": "github.com/dgrijalva/jwt-go",
+			"Comment": "v2.5.0",
+			"Rev": "b446e078d613dc395bf50b08884acbeafb19ce50"
 		},
 		{
 			"ImportPath": "github.com/dgryski/dgoogauth",
@@ -90,6 +88,11 @@
 			"Rev": "1c83b3eabd45b6d76072b66b746c20815fb2872d"
 		},
 		{
+			"ImportPath": "github.com/gorilla/handlers",
+			"Comment": "v1.1-4-gd0f2612",
+			"Rev": "d0f261246491e3a8613039e90764460448dc05f5"
+		},
+		{
 			"ImportPath": "github.com/gorilla/mux",
 			"Rev": "9c068cf16d982f8bd444b8c352acbeec34c4fe5b"
 		},
@@ -113,6 +116,10 @@
 		},
 		{
 			"ImportPath": "github.com/mattermost/rsc/qr",
+			"Rev": "bbaefb05eaa0389ea712340066837c8ce4d287f9"
+		},
+		{
+			"ImportPath": "github.com/mattermost/rsc/qr/coding",
 			"Rev": "bbaefb05eaa0389ea712340066837c8ce4d287f9"
 		},
 		{
