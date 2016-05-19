@@ -605,11 +605,7 @@ func AuthorizeOAuthUser(service, code, state, redirectUri string) (io.ReadCloser
 	if service == "adfs" {
 		ac, err1, err2 := AccessResponseFromJsonADFS(resp.Body, pubkey)
 		if len(err2) == 0 && ac != nil {
-			if result := <-tchan; result.Err != nil {
-				return nil, "", nil, result.Err
-			} else {
-				return ac, result.Data.(*model.Team), stateProps, nil
-			}
+				return ac, teamId, stateProps, nil
 		} else {
 			return nil, "", nil, model.NewLocAppError(err1, "api.user.api.adfs_oauth.adfs_error.app_error", nil, err2)
 		}

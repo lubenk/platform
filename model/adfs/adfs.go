@@ -38,7 +38,7 @@ func userFromADFSUser(glu *ADFSUser) *model.User {
 	user.FirstName = glu.FirstName
 	user.LastName = glu.LastName
 	user.Email = glu.Email
-	user.AuthData = glu.Id
+	user.AuthData = &glu.Id
 	user.AuthService = USER_AUTH_SERVICE_ADFS
 
 	return user
