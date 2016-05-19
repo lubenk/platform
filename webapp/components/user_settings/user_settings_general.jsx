@@ -392,6 +392,24 @@ class UserSettingsGeneralTab extends React.Component {
                         {helpText}
                     </div>
                 );
+            } else if (this.props.user.auth_service === Constants.ADFS_SERVICE) {
+                inputs.push(
+                    <div
+                        key='oauthEmailInfo'
+                        className='form-group'
+                    >
+                        <div className='setting-list__hint'>
+                            <FormattedMessage
+                                id='user.settings.general.emailCantUpdateADFS'
+                                defaultMessage='Login occurs through ADFS. Email cannot be updated. Email address used for notifications is {email}.'
+                                values={{
+                                    email: this.state.email
+                                }}
+                            />
+                        </div>
+                        {helpText}
+                    </div>
+                );
             } else if (this.props.user.auth_service === Constants.LDAP_SERVICE) {
                 inputs.push(
                     <div
@@ -461,6 +479,16 @@ class UserSettingsGeneralTab extends React.Component {
                     <FormattedMessage
                         id='user.settings.general.loginGitlab'
                         defaultMessage='Login done through GitLab ({email})'
+                        values={{
+                            email: this.state.email
+                        }}
+                    />
+                );
+            } else if (this.props.user.auth_service === Constants.ADFS_SERVICE) {
+                describe = (
+                    <FormattedMessage
+                        id='user.settings.general.loginADFS'
+                        defaultMessage='Login done through ADFS ({email})'
                         values={{
                             email: this.state.email
                         }}

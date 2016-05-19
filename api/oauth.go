@@ -491,14 +491,30 @@ func signupWithOAuth(c *Context, w http.ResponseWriter, r *http.Request) {
 
 func GetAuthorizationCode(c *Context, service string, props map[string]string, loginHint string) (string, *model.AppError) {
 
-	sso := utils.Cfg.GetSSOService(service)
-	if sso != nil && !sso.Enable {
-		return "", model.NewLocAppError("GetAuthorizationCode", "api.user.get_authorization_code.unsupported.app_error", nil, "service="+service)
-	}
+  var scope string
+	var clientId string
+	var endpoint string
+	var resource string
 
-	clientId := sso.Id
-	endpoint := sso.AuthEndpoint
-	scope := sso.Scope
+	if service == "adfs" {
+		adfs := utils.Cfg.GetSSOServiceADFS(service)
+		if adfs != nil && !adfs.Enable {
+			return "", model.NewLocAppError("GetAuthorizationCode", "api.user.get_authorization_code.unsupported.app_error", nil, "service="+service)
+		} else {
+			clientId = adfs.Id
+			endpoint = adfs.AuthEndpoint
+			resource = adfs.RelyingPartyIdentifier
+		}
+	} else {
+		sso := utils.Cfg.GetSSOService(service)
+		if sso != nil && !sso.Enable {
+			return "", model.NewLocAppError("GetAuthorizationCode", "api.user.get_authorization_code.unsupported.app_error", nil, "service="+service)
+		} else {
+			clientId = sso.Id
+			endpoint = sso.AuthEndpoint
+			scope = sso.Scope
+		}
+	}
 
 	props["hash"] = model.HashPassword(clientId)
 	state := b64.StdEncoding.EncodeToString([]byte(model.MapToJson(props)))
@@ -515,13 +531,39 @@ func GetAuthorizationCode(c *Context, service string, props map[string]string, l
 		authUrl += "&login_hint=" + utils.UrlEncode(loginHint)
 	}
 
+	if len(resource) > 0 {
+		authUrl += "&resource=" + utils.UrlEncode(resource)
+	}
+
 	return authUrl, nil
 }
 
 func AuthorizeOAuthUser(service, code, state, redirectUri string) (io.ReadCloser, string, map[string]string, *model.AppError) {
-	sso := utils.Cfg.GetSSOService(service)
-	if sso == nil || !sso.Enable {
-		return nil, "", nil, model.NewLocAppError("AuthorizeOAuthUser", "api.user.authorize_oauth_user.unsupported.app_error", nil, "service="+service)
+	var clientId string
+	var secret string
+	var tokenendpoint string
+	var userapiendpoint string
+	var pubkey string
+
+	if service == "adfs" {
+		adfs := utils.Cfg.GetSSOServiceADFS(service)
+		if adfs != nil && !adfs.Enable {
+			return nil, "", nil, model.NewLocAppError("AuthorizeOAuthUser", "api.user.authorize_oauth_user.unsupported.app_error", nil, "service="+service)
+		} else {
+			clientId = adfs.Id
+			tokenendpoint = adfs.TokenEndpoint
+			pubkey = adfs.PubKey
+		}
+	} else {
+		sso := utils.Cfg.GetSSOService(service)
+		if sso != nil && !sso.Enable {
+			return nil, "", nil, model.NewLocAppError("AuthorizeOAuthUser", "api.user.authorize_oauth_user.unsupported.app_error", nil, "service="+service)
+		} else {
+			clientId = sso.Id
+			tokenendpoint = sso.TokenEndpoint
+			secret = sso.Secret
+			userapiendpoint = sso.UserApiEndpoint
+		}
 	}
 
 	stateStr := ""
@@ -533,15 +575,15 @@ func AuthorizeOAuthUser(service, code, state, redirectUri string) (io.ReadCloser
 
 	stateProps := model.MapFromJson(strings.NewReader(stateStr))
 
-	if !model.ComparePassword(stateProps["hash"], sso.Id) {
+	if !model.ComparePassword(stateProps["hash"], clientId) {
 		return nil, "", nil, model.NewLocAppError("AuthorizeOAuthUser", "api.user.authorize_oauth_user.invalid_state.app_error", nil, "")
 	}
 
-	teamId := stateProps["team_id"]
+  teamId := stateProps["team_id"]
 
 	p := url.Values{}
-	p.Set("client_id", sso.Id)
-	p.Set("client_secret", sso.Secret)
+	p.Set("client_id", clientId)
+	p.Set("client_secret", secret)
 	p.Set("code", code)
 	p.Set("grant_type", model.ACCESS_TOKEN_GRANT_TYPE)
 	p.Set("redirect_uri", redirectUri)
@@ -550,44 +592,57 @@ func AuthorizeOAuthUser(service, code, state, redirectUri string) (io.ReadCloser
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: *utils.Cfg.ServiceSettings.EnableInsecureOutgoingConnections},
 	}
 	client := &http.Client{Transport: tr}
-	req, _ := http.NewRequest("POST", sso.TokenEndpoint, strings.NewReader(p.Encode()))
+	req, _ := http.NewRequest("POST", tokenendpoint, strings.NewReader(p.Encode()))
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 
-	var ar *model.AccessResponse
-	if resp, err := client.Do(req); err != nil {
+	resp, err := client.Do(req)
+	if err != nil {
 		return nil, "", nil, model.NewLocAppError("AuthorizeOAuthUser", "api.user.authorize_oauth_user.token_failed.app_error", nil, err.Error())
+	}
+
+	if service == "adfs" {
+		ac, err1, err2 := AccessResponseFromJsonADFS(resp.Body, pubkey)
+		if len(err2) == 0 && ac != nil {
+			if result := <-tchan; result.Err != nil {
+				return nil, "", nil, result.Err
+			} else {
+				return ac, result.Data.(*model.Team), stateProps, nil
+			}
+		} else {
+			return nil, "", nil, model.NewLocAppError(err1, "api.user.api.adfs_oauth.adfs_error.app_error", nil, err2)
+		}
 	} else {
+
+		var ar *model.AccessResponse
 		ar = model.AccessResponseFromJson(resp.Body)
 		if ar == nil {
 			return nil, "", nil, model.NewLocAppError("AuthorizeOAuthUser", "api.user.authorize_oauth_user.bad_response.app_error", nil, "")
 		}
+		if strings.ToLower(ar.TokenType) != model.ACCESS_TOKEN_TYPE {
+			return nil, "", nil, model.NewLocAppError("AuthorizeOAuthUser", "api.user.authorize_oauth_user.bad_token.app_error", nil, "token_type="+ar.TokenType)
+		}
+
+		if len(ar.AccessToken) == 0 {
+			return nil, "", nil, model.NewLocAppError("AuthorizeOAuthUser", "api.user.authorize_oauth_user.missing.app_error", nil, "")
+		}
+
+		p = url.Values{}
+		p.Set("access_token", ar.AccessToken)
+		req, _ = http.NewRequest("GET", userapiendpoint, strings.NewReader(""))
+
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Authorization", "Bearer "+ar.AccessToken)
+
+		if resp, err := client.Do(req); err != nil {
+			return nil, "", nil, model.NewLocAppError("AuthorizeOAuthUser", "api.user.authorize_oauth_user.service.app_error", map[string]interface{}{"Service": service}, err.Error())
+		} else {
+      return resp.Body, teamId, stateProps, nil
+		}
 	}
-
-	if strings.ToLower(ar.TokenType) != model.ACCESS_TOKEN_TYPE {
-		return nil, "", nil, model.NewLocAppError("AuthorizeOAuthUser", "api.user.authorize_oauth_user.bad_token.app_error", nil, "token_type="+ar.TokenType)
-	}
-
-	if len(ar.AccessToken) == 0 {
-		return nil, "", nil, model.NewLocAppError("AuthorizeOAuthUser", "api.user.authorize_oauth_user.missing.app_error", nil, "")
-	}
-
-	p = url.Values{}
-	p.Set("access_token", ar.AccessToken)
-	req, _ = http.NewRequest("GET", sso.UserApiEndpoint, strings.NewReader(""))
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+ar.AccessToken)
-
-	if resp, err := client.Do(req); err != nil {
-		return nil, "", nil, model.NewLocAppError("AuthorizeOAuthUser", "api.user.authorize_oauth_user.service.app_error",
-			map[string]interface{}{"Service": service}, err.Error())
-	} else {
-		return resp.Body, teamId, stateProps, nil
-	}
-
+	return nil, "", nil, nil
 }
 
 func CompleteSwitchWithOAuth(c *Context, w http.ResponseWriter, r *http.Request, service string, userData io.ReadCloser, email string) {

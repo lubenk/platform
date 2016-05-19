@@ -231,6 +231,7 @@ export default class Login extends React.Component {
 
         const ldapEnabled = global.window.mm_config.EnableLdap === 'true';
         const gitlabSigninEnabled = global.window.mm_config.EnableSignUpWithGitLab === 'true';
+        const ADFSSigninEnabled = global.window.mm_config.EnableSignUpWithADFS === 'true';
         const googleSigninEnabled = global.window.mm_config.EnableSignUpWithGoogle === 'true';
         const usernameSigninEnabled = global.window.mm_config.EnableSignInWithUsername === 'true';
         const emailSigninEnabled = global.window.mm_config.EnableSignInWithEmail === 'true';
@@ -324,7 +325,7 @@ export default class Login extends React.Component {
             );
         }
 
-        if ((emailSigninEnabled || usernameSigninEnabled || ldapEnabled) && (gitlabSigninEnabled || googleSigninEnabled)) {
+        if ((emailSigninEnabled || usernameSigninEnabled || ldapEnabled) && (gitlabSigninEnabled || googleSigninEnabled || ADFSSigninEnabled)) {
             loginControls.push(
                 <div
                     key='divider'
@@ -359,6 +360,24 @@ export default class Login extends React.Component {
                         <FormattedMessage
                             id='login.gitlab'
                             defaultMessage='GitLab'
+                        />
+                    </span>
+                </a>
+            );
+        }
+
+        if (ADFSSigninEnabled) {
+            loginControls.push(
+                <a
+                    className='btn btn-custom-login adfs'
+                    key='adfs'
+                    href={Client.getOAuthRoute() + '/adfs/login'}
+                >
+                    <span className='icon'/>
+                    <span>
+                        <FormattedMessage
+                            id='login.adfs'
+                            defaultMessage='with ADFS'
                         />
                     </span>
                 </a>

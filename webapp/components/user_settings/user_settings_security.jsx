@@ -569,6 +569,24 @@ class SecurityTab extends React.Component {
                 );
             }
 
+            let ADFSOption;
+            if (global.window.mm_config.EnableSignUpWithADFS === 'true' && user.auth_service === '') {
+                ADFSOption = (
+                    <div>
+                        <Link
+                            className='btn btn-primary'
+                            to={'/claim/email_to_oauth?email=' + encodeURIComponent(user.email) + '&old_type=' + user.auth_service + '&new_type=' + Constants.ADFS_SERVICE}
+                        >
+                            <FormattedMessage
+                                id='user.settings.security.switchADFS'
+                                defaultMessage='Switch to using ADFS SSO'
+                            />
+                        </Link>
+                        <br/>
+                    </div>
+                );
+            }
+
             let googleOption;
             if (global.window.mm_config.EnableSignUpWithGoogle === 'true' && user.auth_service === '') {
                 googleOption = (
@@ -613,6 +631,8 @@ class SecurityTab extends React.Component {
                    <br/>
                    {ldapOption}
                    {googleOption}
+                   <br/>
+                   {ADFSOption}
                 </div>
             );
 
@@ -659,6 +679,13 @@ class SecurityTab extends React.Component {
                     defaultMessage='GitLab SSO'
                 />
             );
+        } else if (this.props.user.auth_service === Constants.ADFS_SERVICE) {
+            describe = (
+                <FormattedMessage
+                    id='user.settings.security.adfs'
+                    defaultMessage='ADFS SSO'
+                />
+            );
         } else if (this.props.user.auth_service === Constants.LDAP_SERVICE) {
             describe = (
                 <FormattedMessage
@@ -681,6 +708,7 @@ class SecurityTab extends React.Component {
 
         let numMethods = 0;
         numMethods = global.window.mm_config.EnableSignUpWithGitLab === 'true' ? numMethods + 1 : numMethods;
+        numMethods = global.window.mm_config.EnableSignUpWithADFS === 'true' ? numMethods + 1 : numMethods;
         numMethods = global.window.mm_config.EnableSignUpWithGoogle === 'true' ? numMethods + 1 : numMethods;
         numMethods = global.window.mm_config.EnableLdap === 'true' ? numMethods + 1 : numMethods;
 

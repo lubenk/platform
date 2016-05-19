@@ -48,6 +48,10 @@
     "translation": "September"
   },
   {
+    "id": "api.adfs_oauth.adfs_error",
+    "translation": "Problem with ADFS authentication/config"
+  },
+  {
     "id": "api.admin.file_read_error",
     "translation": "Error reading log file"
   },

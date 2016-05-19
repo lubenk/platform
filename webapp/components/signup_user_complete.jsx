@@ -537,6 +537,24 @@ export default class SignupUserComplete extends React.Component {
             );
         }
 
+        if (global.window.mm_config.EnableSignUpWithADFS === 'true') {
+            signupMessage.push(
+                <a
+                    className='btn btn-custom-login adfs'
+                    key='adfs'
+                    href={Client.getOAuthRoute() + '/adfs/signup' + window.location.search}
+                >
+                    <span className='icon'/>
+                    <span>
+                        <FormattedMessage
+                            id='signup_user_completed.adfs'
+                            defaultMessage='with ADFS'
+                        />
+                    </span>
+                </a>
+            );
+        }
+
         if (global.window.mm_config.EnableSignUpWithGoogle === 'true') {
             signupMessage.push(
                 <a

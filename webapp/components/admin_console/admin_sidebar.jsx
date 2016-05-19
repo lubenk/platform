@@ -408,6 +408,18 @@ export default class AdminSidebar extends React.Component {
                                         />
                                     </a>
                                 </li>
+                                <li>
+                                    <a
+                                        href='#'
+                                        className={this.isSelected('adfs_settings')}
+                                        onClick={this.handleClick.bind(this, 'adfs_settings', null)}
+                                    >
+                                        <FormattedMessage
+                                            id='admin.sidebar.adfs'
+                                            defaultMessage='ADFS Settings'
+                                        />
+                                    </a>
+                                </li>
                                 {ldapSettings}
                                 {complianceSettings}
                                 <li>
