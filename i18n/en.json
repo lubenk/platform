@@ -52,6 +52,10 @@
     "translation": "Problem with ADFS authentication/config"
   },
   {
+    "id": "api.adfs_oauth.adfs_access",
+    "translation": "Access denied"
+  },
+  {
     "id": "api.admin.file_read_error",
     "translation": "Error reading log file"
   },
@@ -441,7 +445,7 @@
   },
   {
     "id": "api.command_shrug.desc",
-    "translation": "Adds ¯\\_(ツ)_/¯ to your message"
+    "translation": "Adds ¯\\_(.)_/¯ to your message"
   },
   {
     "id": "api.command_shrug.hint",
@@ -1253,7 +1257,7 @@
   },
   {
     "id": "api.templates.invite_body.extra_info",
-    "translation": "Mattermost lets you share messages and files from your PC or phone, with instant search and archiving. After you’ve joined <strong>{{.TeamDisplayName}}</strong>, you can sign-in to your new team and access these features anytime from the web address:<br/><br/><a href='{{.TeamURL}}'>{{.TeamURL}}</a>"
+    "translation": "Mattermost lets you share messages and files from your PC or phone, with instant search and archiving. After you.ve joined <strong>{{.TeamDisplayName}}</strong>, you can sign-in to your new team and access these features anytime from the web address:<br/><br/><a href='{{.TeamURL}}'>{{.TeamURL}}</a>"
   },
   {
     "id": "api.templates.invite_body.info",
@@ -1645,7 +1649,7 @@
   },
   {
     "id": "api.user.send_password_reset.find.app_error",
-    "translation": "We couldn’t find an account with that address."
+    "translation": "We couldn.t find an account with that address."
   },
   {
     "id": "api.user.send_password_reset.send.app_error",
@@ -4000,3 +4004,4 @@
     "translation": "Failed to add directory to watcher %v"
   }
 ]
+

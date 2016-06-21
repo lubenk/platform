@@ -186,6 +186,11 @@ func completeOAuth(c *Context, w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	service := params["service"]
 
+	if r.URL.Query().Get("error") == "access_denied" {
+		c.Err = model.NewLocAppError("AdfsErrorUser", "api.adfs_oauth.adfs_access", nil, r.URL.Query().Get("error"))
+		return
+	}
+
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
 
@@ -607,7 +612,7 @@ func AuthorizeOAuthUser(service, code, state, redirectUri string) (io.ReadCloser
 		if len(err2) == 0 && ac != nil {
 			return ac, teamId, stateProps, nil
 		} else {
-			return nil, "", nil, model.NewLocAppError(err1, "api.user.api.adfs_oauth.adfs_error.app_error", nil, err2)
+			return nil, "", nil, model.NewLocAppError(err1, "api.adfs_oauth.adfs_error", nil, err2)
 		}
 	} else {
 
